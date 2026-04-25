@@ -12,17 +12,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
 
-html, body {
-  background-color: #ffffff !important;
-  color: #171717 !important;
-}
 
 body {
   background: var(--background);
@@ -30,38 +20,35 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ── Force white background only on the birth details page ── */
-body:has(.birth-page-wrapper) {
-  background: #ffffff !important;
-  color: #171717 !important;
+@supports (color: color-mix(in lab, red, red)) {
+    .text-amber-700\/40 {
+        color: 
+color-mix(in oklab, #000000 100%, transparent);
+    }
 }
 
 @supports (color: color-mix(in lab, red, red)) {
-  .text-amber-700\/40 {
-    color: color-mix(in oklab, #b45309 40%, transparent);
-  }
+    .text-amber-700\/80 {
+        color: color-mix(in oklab, #000000 100% , transparent);
+    }
 }
 
 @supports (color: color-mix(in lab, red, red)) {
-  .text-amber-700\/80 {
-    color: color-mix(in oklab, #b45309 80%, transparent);
-  }
+    .text-amber-700\/70 {
+        color: 
+color-mix(in oklab, #171717 100%, transparent);
+    }
 }
 
 @supports (color: color-mix(in lab, red, red)) {
-  .text-amber-700\/70 {
-    color: color-mix(in oklab, #b45309 70%, transparent);
-  }
+    .text-amber-700\/60 {
+        color: 
+color-mix(in oklab, #0e2b4d 100%, transparent);
+    }
 }
 
 @supports (color: color-mix(in lab, red, red)) {
-  .text-amber-700\/60 {
-    color: color-mix(in oklab, #b45309 60%, transparent);
-  }
-}
-
-@supports (color: color-mix(in lab, red, red)) {
-  .text-amber-700\/50 {
-    color: color-mix(in oklab, #b45309 50%, transparent);
-  }
+    .text-amber-700\/50 {
+        color: color-mix(in oklab, lab(2 0.06 0.1) 100% , transparent);
+    }
 }
