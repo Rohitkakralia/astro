@@ -558,7 +558,7 @@ export default function BirthDetailsForm() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ width: "100%", maxWidth: 560, margin: "0 auto", padding: "2rem 1rem" }}>
+    <div style={{ width: "100%", maxWidth: 560, margin: "0 auto", padding: "2rem 1rem", backgroundColor: "#faf7f2"}}>
       <style>{css}</style>
 
       <div style={{ textAlign: "center", marginBottom: "2rem" }}>
