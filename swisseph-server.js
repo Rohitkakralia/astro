@@ -152,15 +152,23 @@ function enrichLongitude(longitude) {
 }
 
 function calcHouseData(jd, lat, lon, ayanamsaId) {
+  
   swisseph.swe_set_sid_mode(ayanamsaId, 0, 0);
 
   const houses   = swisseph.swe_houses(jd, lat, lon, "P");
+  // console.log("houses", houses);
   const ayanamsa = swisseph.swe_get_ayanamsa_ut(jd);
 
-  const cusps     = houses.house.map(c => ((c - ayanamsa + 360) % 360));
-  const ascendant = ((houses.ascendant - ayanamsa + 360) % 360);
+  // console.log("Ayanamsa ID   :", ayanamsaId);
+  // console.log("Ayanamsa value:", ayanamsa);
+  // console.log("Tropical H1   :", houses.house[0]);
+  // console.log("Sidereal H1   :", ((houses.house[0] - ayanamsa + 360) % 360));
 
-  return { ascendant, houseCusps: cusps };
+  const houseCusps = houses.house.map(c => ((c - ayanamsa + 360) % 360));
+  // console.log("house Cusp:", houseCusps);
+  const ascendant  = ((houses.ascendant - ayanamsa + 360) % 360);
+
+  return { ascendant, houseCusps };
 }
 
 function calcPlanet(jd, planetId, ayanamsaId) {
@@ -194,6 +202,96 @@ function normalizeDegree(deg) {
 function angularDistance(a, b) {
   let diff = Math.abs(a - b) % 360;
   return diff > 180 ? 360 - diff : diff;
+}
+
+
+// ── PRATYANTAR DASHA (sub of AD) ──────────────────────────────────────────
+function generatePratyantarDasha(mdLord, adLord, adStart) {
+  const startIndex = DASHA_SEQUENCE.indexOf(adLord);
+  let current = new Date(adStart).getTime();
+  const pds = [];
+
+  for (let i = 0; i < 9; i++) {
+    const pdLord = DASHA_SEQUENCE[(startIndex + i) % 9];
+    // Formula: (MD years × AD years × PD years) / (120 × 120)
+    const pdYears = (DASHA_YEARS[mdLord] * DASHA_YEARS[adLord] * DASHA_YEARS[pdLord]) / (TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS);
+    const pdMs = pdYears * YEAR_MS;
+    const end = current + pdMs;
+
+    pds.push({
+      lord: pdLord,
+      start: new Date(current).toISOString(),
+      end: new Date(end).toISOString(),
+    });
+
+    current = end;
+  }
+
+  return pds;
+}
+
+// ── SOOKSHMA DASHA (sub of PD) ────────────────────────────────────────────
+function generateSookshmaDasha(mdLord, adLord, pdLord, pdStart) {
+  const startIndex = DASHA_SEQUENCE.indexOf(pdLord);
+  let current = new Date(pdStart).getTime();
+  const sds = [];
+
+  for (let i = 0; i < 9; i++) {
+    const sdLord = DASHA_SEQUENCE[(startIndex + i) % 9];
+    const sdYears = (DASHA_YEARS[mdLord] * DASHA_YEARS[adLord] * DASHA_YEARS[pdLord] * DASHA_YEARS[sdLord]) / (TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS);
+    const sdMs = sdYears * YEAR_MS;
+    const end = current + sdMs;
+
+    sds.push({
+      lord: sdLord,
+      start: new Date(current).toISOString(),
+      end: new Date(end).toISOString(),
+    });
+
+    current = end;
+  }
+
+  return sds;
+}
+
+// ── PRANA DASHA (sub of SD) ───────────────────────────────────────────────
+function generatePranaDasha(mdLord, adLord, pdLord, sdLord, sdStart) {
+  const startIndex = DASHA_SEQUENCE.indexOf(sdLord);
+  let current = new Date(sdStart).getTime();
+  const prs = [];
+
+  for (let i = 0; i < 9; i++) {
+    const prLord = DASHA_SEQUENCE[(startIndex + i) % 9];
+    const prYears = (DASHA_YEARS[mdLord] * DASHA_YEARS[adLord] * DASHA_YEARS[pdLord] * DASHA_YEARS[sdLord] * DASHA_YEARS[prLord]) / (TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS * TOTAL_DASHA_YEARS);
+    const prMs = prYears * YEAR_MS;
+    const end = current + prMs;
+
+    prs.push({
+      lord: prLord,
+      start: new Date(current).toISOString(),
+      end: new Date(end).toISOString(),
+    });
+
+    current = end;
+  }
+
+  return prs;
+}
+
+
+function getCurrentPD(pds) {
+  const now = new Date();
+  return pds.find(pd => now >= new Date(pd.start) && now <= new Date(pd.end));
+}
+
+function getCurrentSD(sds) {
+  const now = new Date();
+  return sds.find(sd => now >= new Date(sd.start) && now <= new Date(sd.end));
+}
+
+function getCurrentPR(prs) {
+  const now = new Date();
+  return prs.find(pr => now >= new Date(pr.start) && now <= new Date(pr.end));
 }
 
 /*─────────────────────────────────────────────────────────────
@@ -582,6 +680,24 @@ function calculate(ayanamsa, coordinates, datetime) {
   );
 
   const currentADL = getCurrentADL(antardashas);
+
+   // Pratyantar Dasha (PD) — sub-periods of current AD
+  const pratyantar_timeline = currentADL
+    ? generatePratyantarDasha(currentMD.lord, currentADL.lord, currentADL.start)
+    : [];
+  const current_pd = getCurrentPD(pratyantar_timeline);
+
+  // Sookshma Dasha (SD) — sub-periods of current PD
+  const sookshma_timeline = current_pd
+    ? generateSookshmaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_pd.start)
+    : [];
+  const current_sd = getCurrentSD(sookshma_timeline);
+
+  // Prana Dasha (PR) — sub-periods of current SD
+  const prana_timeline = current_sd
+    ? generatePranaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_sd.lord, current_sd.start)
+    : [];
+  const current_pr = getCurrentPR(prana_timeline);
   const projectionHits = calculateProjectionHits(
   planetPositions,
   houseCusps
@@ -596,7 +712,12 @@ function calculate(ayanamsa, coordinates, datetime) {
     mahadasha_timeline:  mdTimeline,
     current_mahadasha:   currentMD,
     antardasha_timeline: antardashas,
-    current_adl:         currentADL,
+    current_adl:         currentADL, pratyantar_timeline,
+    current_pd,
+    sookshma_timeline,
+    current_sd,
+    prana_timeline,
+    current_pr,
     projection_hits: projectionHits,
   };
 }
