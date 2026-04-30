@@ -1179,7 +1179,7 @@ export default function ChartsPage() {
           "00",
         ].join(":");
         const isoDatetime = `${payload.dob}T${localTimeFull}${sign}${offH}:${offM}`;
-        const url = `/api/planets?ayanamsa=5&coordinates=${encodeURIComponent(`${payload.lat},${payload.lon}`)}&datetime=${encodeURIComponent(isoDatetime)}`;
+        const url = `/api/planets?ayanamsa=1&coordinates=${encodeURIComponent(`${payload.lat},${payload.lon}`)}&datetime=${encodeURIComponent(isoDatetime)}`;
         const res = await fetch(url);
         const json = await res.json();
         if (!res.ok || !json.success)
