@@ -195,36 +195,36 @@ export default function AstroScriptTable({ data }) {
         <thead>
           <tr style={{ background: "#e5e7eb" }}>
             <th style={th}>
-              A<br />
+              1<br />
               <span style={thSub}>Planets</span>
             </th>
             <th style={th}>
-              B<br />
+              2<br />
               <span style={thSub}>Hit From</span>
             </th>
             <th style={{ ...th, background: "#d1d5db", textAlign: "center" }}>
-              C<br />
+              3<br />
               <span style={thSub}>Signs</span>
             </th>
             <th style={th}>
-              D<br />
+              4<br />
               <span style={thSub}>Deg</span>
             </th>
             <th style={th}>
-              E<br />
+              5<br />
               <span style={thSub}>Box (Life Context)</span>
             </th>
             {/* ── NEW COLUMNS ── */}
             <th style={{ ...th, background: "#fef9c3" }}>
-              F<br />
+              6<br />
               <span style={thSub}>Strength</span>
             </th>
             <th style={{ ...th, background: "#fef9c3" }}>
-              G<br />
+              7<br />
               <span style={thSub}>Conclusion</span>
             </th>
             <th style={th}>
-              H<br />
+              8<br />
               <span style={thSub}>Hit From</span>
             </th>
           </tr>

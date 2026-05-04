@@ -152,7 +152,7 @@ export default function D1Chart({ data }) {
         "font-family": "Arial, sans-serif",
         fill: isLagna ? "#cc2200" : "#8b6914",
         opacity: "0.85",
-      }, String(house)));
+      }, String(signIdx + 1)));
 
       // ── Planets: short name + degree + rashi ──────────────────────────────
       if (ps.length > 0) {

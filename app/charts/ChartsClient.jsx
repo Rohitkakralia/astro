@@ -378,8 +378,14 @@ function CuspKundaliSVG({ planets = [], houseCusps = [], lagnaSignIdx = 0 }) {
   }, [planets, houseCusps, lagnaSignIdx]);
 
   return (
-  <svg ref={svgRef} viewBox={`0 0 700 400`} width="100%" height="100%" className="block w-full" />
-);
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 700 400`}
+      width="100%"
+      height="100%"
+      className="block w-full"
+    />
+  );
 }
 // ── Spinner ───────────────────────────────────────────────────────────────────
 function Spinner({ label }) {
@@ -433,8 +439,11 @@ function Row({ label, value, mono = true, last = false }) {
 function TimeLineTableForPDF({ dashaData }) {
   if (!dashaData) return null;
   const {
-    mahadasha_timeline = [], antardasha_timeline = [],
-    current_mahadasha, current_adl, occupants = {},
+    mahadasha_timeline = [],
+    antardasha_timeline = [],
+    current_mahadasha,
+    current_adl,
+    occupants = {},
   } = dashaData;
 
   const planetToOccupantHouses = {};
@@ -446,7 +455,9 @@ function TimeLineTableForPDF({ dashaData }) {
   }
 
   const planetToLordHouses = {};
-  for (const [planet, houses] of Object.entries(dashaData.planet_lordships || {})) {
+  for (const [planet, houses] of Object.entries(
+    dashaData.planet_lordships || {},
+  )) {
     planetToLordHouses[planet] = houses.map((h) => h.house);
   }
 
@@ -463,12 +474,17 @@ function TimeLineTableForPDF({ dashaData }) {
         {current_mahadasha && (
           <p className="text-xs text-amber-700/70 mt-1 leading-relaxed">
             Current MD:&nbsp;
-            <span className="font-bold text-amber-800">{current_mahadasha.lord}</span>{" "}
-            ({fmtDate(current_mahadasha.start)} → {fmtDate(current_mahadasha.end)})
+            <span className="font-bold text-amber-800">
+              {current_mahadasha.lord}
+            </span>{" "}
+            ({fmtDate(current_mahadasha.start)} →{" "}
+            {fmtDate(current_mahadasha.end)})
             {current_adl && (
               <span className="ml-2">
                 · Current AD:&nbsp;
-                <span className="font-bold text-amber-800">{current_adl.lord}</span>{" "}
+                <span className="font-bold text-amber-800">
+                  {current_adl.lord}
+                </span>{" "}
                 (→ {fmtDate(current_adl.end)})
               </span>
             )}
@@ -481,48 +497,80 @@ function TimeLineTableForPDF({ dashaData }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="bg-stone-100">
-              {["Planet", "Occupant", "Lordship", "ADL upto", "MD upto"].map((h, i) => (
-                <th key={h} className={`py-2 px-3 text-xs tracking-wider font-bold border border-stone-200 ${i === 0 ? "text-left text-red-700" : "text-center text-red-700"}`}>{h}</th>
-              ))}
+              {["Planet", "Occupant", "Lordship", "ADL upto", "MD upto"].map(
+                (h, i) => (
+                  <th
+                    key={h}
+                    className={`py-2 px-3 text-xs tracking-wider font-bold border border-stone-200 ${i === 0 ? "text-left text-red-700" : "text-center text-red-700"}`}
+                  >
+                    {h}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
             {mahadasha_timeline.map((md, i) => {
-              const isCurrent = current_mahadasha?.lord === md.lord &&
-                new Date(md.start).getTime() === new Date(current_mahadasha.start).getTime();
+              const isCurrent =
+                current_mahadasha?.lord === md.lord &&
+                new Date(md.start).getTime() ===
+                  new Date(current_mahadasha.start).getTime();
               const occupantHouses = planetToOccupantHouses[md.lord] ?? [];
-              const occupantStr = occupantHouses.length ? occupantHouses.sort((a, b) => a - b).join(", ") : "—";
+              const occupantStr = occupantHouses.length
+                ? occupantHouses.sort((a, b) => a - b).join(", ")
+                : "—";
               const lordHouses = planetToLordHouses[md.lord] ?? [];
-              const lordshipStr = lordHouses.length ? lordHouses.sort((a, b) => a - b).join(", ") : "—";
+              const lordshipStr = lordHouses.length
+                ? lordHouses.sort((a, b) => a - b).join(", ")
+                : "—";
               const adlEnd = adlEndMap[md.lord] ?? null;
               const adlStr = adlEnd ? fmtDate(adlEnd) : "—";
               const isCurrentAD = md.lord === currentADLord;
 
               return (
-                <tr key={i} className={`border-b border-stone-100 ${isCurrent ? "bg-amber-50" : i % 2 === 0 ? "bg-white" : "bg-stone-50/40"}`}>
+                <tr
+                  key={i}
+                  className={`border-b border-stone-100 ${isCurrent ? "bg-amber-50" : i % 2 === 0 ? "bg-white" : "bg-stone-50/40"}`}
+                >
                   <td className="py-2 px-3 border border-stone-100">
                     <div className="flex items-center gap-1.5">
-                      <span className={`text-xs font-semibold ${isCurrent ? "text-amber-800" : "text-stone-800"}`}>{md.lord}</span>
-                      {isCurrent && <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-1 py-0.5">NOW</span>}
+                      <span
+                        className={`text-xs font-semibold ${isCurrent ? "text-amber-800" : "text-stone-800"}`}
+                      >
+                        {md.lord}
+                      </span>
+                      {isCurrent && (
+                        <span className="text-[8px] font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-1 py-0.5">
+                          NOW
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="py-2 px-3 text-center font-mono text-xs text-stone-700 border border-stone-100">{occupantStr}</td>
-                  <td className="py-2 px-3 text-center font-mono text-xs text-stone-700 border border-stone-100">{lordshipStr}</td>
+                  <td className="py-2 px-3 text-center font-mono text-xs text-stone-700 border border-stone-100">
+                    {occupantStr}
+                  </td>
+                  <td className="py-2 px-3 text-center font-mono text-xs text-stone-700 border border-stone-100">
+                    {lordshipStr}
+                  </td>
                   <td className="py-2 px-3 text-center font-mono text-amber-700/80 text-xs border border-stone-100">
                     <div className="flex items-center justify-center gap-1">
                       {adlStr}
-                      {isCurrentAD && <span className="text-[8px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5">AD</span>}
+                      {isCurrentAD && (
+                        <span className="text-[8px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5">
+                          AD
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="py-2 px-3 text-center font-mono text-amber-700/80 text-xs border border-stone-100">{fmtDate(md.end)}</td>
+                  <td className="py-2 px-3 text-center font-mono text-amber-700/80 text-xs border border-stone-100">
+                    {fmtDate(md.end)}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-
-    
     </div>
   );
 }
@@ -945,7 +993,8 @@ function PlanetRow({ planet, lagnaSignIdx, last = false, dashaData }) {
   const degree = getPlanetLon(planet);
   const zodiac = degree !== null ? degreeToZodiac(degree) : null;
   const ALWAYS_RETROGRADE = ["Rahu", "Ketu"];
-  const isRetro = ALWAYS_RETROGRADE.includes(name) || (planet.is_retrograde ?? false);
+  const isRetro =
+    ALWAYS_RETROGRADE.includes(name) || (planet.is_retrograde ?? false);
   const isLagna = name === "Ascendant";
   const house = isLagna ? 1 : getPlanetHouse(planet, lagnaSignIdx);
 
@@ -1122,11 +1171,14 @@ function ErrorScreen({ message, onBack }) {
 
 // ── DownloadPDFButton ─────────────────────────────────────────────────────────
 function DownloadPDFButton() {
-return (
-<button onClick={() => window.print()} className="no-print text-white bg-amber-700 px-4 py-2 rounded text-sm">
-Download PDF
-</button>
-);
+  return (
+    <button
+      onClick={() => window.print()}
+      className="no-print text-white bg-amber-700 px-4 py-2 rounded text-sm"
+    >
+      Download PDF
+    </button>
+  );
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -1300,38 +1352,38 @@ export default function ChartsPage() {
 
             {/* ── ROW 1: BOTH CHARTS SIDE BY SIDE ───────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-  {/* Cusp Kundali */}
-  <div className="rounded-xl overflow-hidden">
-    <div className="px-4 pt-3 pb-1 flex items-center gap-3">
-      <p className="text-xs font-bold text-red-700 tracking-wide">
-        Cusp Kundli
-      </p>
-      <p className="text-[10px] text-amber-700/40">
-        {ZODIAC_SIGNS[lagnaSignIdx]} Lagna · ℞ = retrograde
-      </p>
-    </div>
-    <div className="w-full">
-      <CuspKundaliSVG
-        planets={planets}
-        houseCusps={houseCusps}
-        lagnaSignIdx={lagnaSignIdx}
-      />
-    </div>
-  </div>
+              {/* Cusp Kundali */}
+              <div className="rounded-xl overflow-hidden">
+                <div className="px-4 pt-3 pb-1 flex items-center gap-3">
+                  <p className="text-xs font-bold text-red-700 tracking-wide">
+                    Cusp Kundli
+                  </p>
+                  <p className="text-[10px] text-amber-700/40">
+                    {ZODIAC_SIGNS[lagnaSignIdx]} Lagna · ℞ = retrograde
+                  </p>
+                </div>
+                <div className="w-full">
+                  <CuspKundaliSVG
+                    planets={planets}
+                    houseCusps={houseCusps}
+                    lagnaSignIdx={lagnaSignIdx}
+                  />
+                </div>
+              </div>
 
-  {/* Lagan Kundali (D1 Chart) */}
-  <div className="rounded-xl overflow-hidden">
-    <div className="px-4 pt-3 pb-1  flex items-center gap-3">
-      <p className="text-xs font-bold text-red-700 tracking-wide">
-        Lagan Kundali
-      </p>
-      <p className="text-[10px] text-amber-700/40">D1 Chart</p>
-    </div>
-    <div className="w-full">
-      <D1Chart data={dashaData} />
-    </div>
-  </div>
-</div>
+              {/* Lagan Kundali (D1 Chart) */}
+              <div className="rounded-xl overflow-hidden">
+                <div className="px-4 pt-3 pb-1  flex items-center gap-3">
+                  <p className="text-xs font-bold text-red-700 tracking-wide">
+                    Lagan Kundali
+                  </p>
+                  <p className="text-[10px] text-amber-700/40">D1 Chart</p>
+                </div>
+                <div className="w-full">
+                  <D1Chart data={dashaData} />
+                </div>
+              </div>
+            </div>
 
             {/* ── ROW 2: TIMELINE TABLE + PLANETARY DEGREES ─────────────── */}
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
@@ -1374,7 +1426,7 @@ export default function ChartsPage() {
               </div>
             </SectionCard>
 
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <KPNakshatraTable dashaData={dashaData} />
               <PlanetKPTable dashaData={dashaData} />
             </div>
@@ -1471,13 +1523,12 @@ export default function ChartsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <KPNakshatraTable dashaData={dashaData} />
-              <PlanetKPTable dashaData={dashaData} />
-            </div>
+          <KPNakshatraTable dashaData={dashaData} />
+          <PlanetKPTable dashaData={dashaData} />
+        </div>
 
-        <TimeLineTableForPDF dashaData={dashaData}/>
+        <TimeLineTableForPDF dashaData={dashaData} />
         <AstroScriptTable data={dashaData} />
-
       </div>
     </div>
   );
