@@ -1,48 +1,61 @@
 "use client";
 import React, { useEffect, useRef } from "react";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const PLANET_ABBR = {
   Sun: "Su", Moon: "Mo", Mars: "Ma", Mercury: "Me",
   Jupiter: "Ju", Venus: "Ve", Saturn: "Sa",
   Rahu: "Ra", Ketu: "Ke", Ascendant: "As", Lagna: "As",
 };
 
-const ANGLE_COLOR = {
-  0:   "#d32f2f",
-  30:  "#90a4ae",
-  45:  "#f06292",
-  60:  "#388e3c",
-  90:  "#f57c00",
-  120: "#1976d2",
-  135: "#ab47bc",
-  150: "#795548",
-  180: "#7b1fa2",
-};
+const RASHI_ORDER = [
+  "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+  "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces",
+];
 
-function angleColor(angle) {
-  const key = Object.keys(ANGLE_COLOR).find(k => Math.abs(Number(k) - angle) < 1);
-  return key ? ANGLE_COLOR[key] : "#999";
-}
+const SIGN_DISPLAY = [
+  "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+  "Libra","Scorpio","Saggi","Capri","Aqua","Pisces",
+];
 
-function normalize(d) {
-  return ((parseFloat(d) % 360) + 360) % 360;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function polarToXY(cx, cy, r, lonDeg) {
-  const rad = (lonDeg - 90) * (Math.PI / 180);
+function normalize(d) { return ((parseFloat(d) % 360) + 360) % 360; }
+
+// 0° Aries = top, increasing clockwise
+function polar(cx, cy, r, lonDeg) {
+  const rad = (lonDeg - 90) * Math.PI / 180;
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function midAngle(a, b) {
+  let sweep = b - a;
+  if (sweep < 0) sweep += 360;
+  return normalize(a + sweep / 2);
+}
+
+function getLonHouse(lon, cusps) {
+  for (let i = 0; i < 12; i++) {
+    const s = cusps[i], e = cusps[(i + 1) % 12];
+    const inside = e > s ? (lon >= s && lon < e) : (lon >= s || lon < e);
+    if (inside) return i + 1;
+  }
+  return 1;
 }
 
 function extractLon(p) {
   const raw = p.absolute_longitude ?? p.longitude ?? p.lon ?? p.degree ?? null;
   if (raw == null) return null;
-  const val = parseFloat(raw);
-  return isNaN(val) ? null : normalize(val);
+  const v = parseFloat(raw);
+  return isNaN(v) ? null : normalize(v);
 }
 
-function extractName(p) {
+function extractPlanetName(p) {
   return p.planet || p.name || p.Planet || p.Name || null;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function WesternHitChart({ data }) {
   const svgRef = useRef(null);
@@ -61,204 +74,290 @@ export default function WesternHitChart({ data }) {
       return el;
     };
 
-    const W = 520, H = 520;
+    // ── Canvas & Radii ────────────────────────────────────────────────────────
+    // Large enough that outside labels don't clip
+    const W = 960, H = 960;
     const cx = W / 2, cy = H / 2;
-    const R       = 200;  // outer zodiac ring
-    const Rinner  = 168;  // inner ring (aspect line endpoints)
-    const Rplanet = 184;  // planet dot
-    const Rlabel  = 214;  // base label radius (outside outer ring)
 
-    svg.appendChild(mk("rect", { x: 0, y: 0, width: W, height: H, fill: "#fffef9" }));
+    // Three concentric circles:
+    // R_RASHI  = outer circle → rashi (zodiac) labels live in the band between R_RASHI and R_BOX
+    // R_BOX    = box/house boundary circle → box lines go from center to here
+    // R_CENTER = hub at center (just a dot reference, no circle drawn)
 
-    // Outer zodiac circle
-    svg.appendChild(mk("circle", { cx, cy, r: R, fill: "none", stroke: "#8b6914", "stroke-width": "2" }));
+    const R_RASHI      = 280;   // outer zodiac ring
+    const R_RASHI_INNER= 230;   // inner edge of rashi label band
+    const R_BOX        = 230;   // box boundary = same as rashi inner
+    const R_HUB        = 0;     // lines go from exact center
+    const R_LABEL      = R_RASHI + 16; // where outside labels start
 
-    // Inner aspect circle
-    svg.appendChild(mk("circle", { cx, cy, r: Rinner, fill: "#f5f5f0", stroke: "#ccc", "stroke-width": "1" }));
+    // ── Background ────────────────────────────────────────────────────────────
+    svg.appendChild(mk("rect", { x:0, y:0, width:W, height:H, fill:"#fffdf5" }));
 
-    // 12 zodiac division lines + rashi numbers
-    for (let i = 0; i < 12; i++) {
-      const deg = i * 30;
-      const p1 = polarToXY(cx, cy, Rinner, deg);
-      const p2 = polarToXY(cx, cy, R, deg);
-      svg.appendChild(mk("line", { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, stroke: "#bbb", "stroke-width": "1" }));
-
-      const midDeg = deg + 15;
-      const lp = polarToXY(cx, cy, (R + Rinner) / 2, midDeg);
-      svg.appendChild(mk("text", {
-        x: lp.x, y: lp.y,
-        "text-anchor": "middle", "dominant-baseline": "central",
-        "font-size": "11", "font-weight": "600", "font-family": "Arial, sans-serif", fill: "#8b6914",
-      }, String(i + 1)));
-    }
-
-    // ── Build planetLonMap ────────────────────────────────────────────────────
-    const planetLonMap = {};
-
+    // ── Build planet longitude map ────────────────────────────────────────────
+    const planetLon = {};
     (data.planet_position || []).forEach(p => {
-      const name = extractName(p);
+      const name = extractPlanetName(p);
       if (!name || name === "Ascendant" || name === "Lagna") return;
       const lon = extractLon(p);
-      if (lon != null) planetLonMap[name] = lon;
+      if (lon != null) planetLon[name] = lon;
     });
 
-    // Fallback: astro_script sign + degree_in_sign
-    const RASHI_ORDER = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-                         "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+    // Fallback via astro_script
     (data.astro_script || []).forEach(row => {
       const name = row.planet;
-      if (!name || planetLonMap[name] != null) return;
-      const signIdx = RASHI_ORDER.indexOf(row.sign);
-      if (signIdx === -1) return;
-      const degInSign = parseFloat(row.degree_in_sign ?? row.degree ?? 0);
-      if (!isNaN(degInSign)) planetLonMap[name] = normalize(signIdx * 30 + degInSign);
+      if (!name || planetLon[name] != null) return;
+      const si = RASHI_ORDER.indexOf(row.sign);
+      if (si === -1) return;
+      const deg = parseFloat(row.degree_in_sign ?? row.degree ?? 0);
+      if (!isNaN(deg)) planetLon[name] = normalize(si * 30 + deg);
     });
 
-    // Ascendant from house_cusps[0]
-    if (data.house_cusps?.[0] != null) {
-      planetLonMap["Ascendant"] = normalize(data.house_cusps[0]);
-    }
+    // Ascendant
+    const ascLon = data.house_cusps?.[0] != null ? normalize(data.house_cusps[0]) : null;
+    if (ascLon != null) planetLon["Ascendant"] = ascLon;
 
-    // ── Planet house map ──────────────────────────────────────────────────────
-    const planetHouseMap = { Ascendant: 1 };
+    // ── House cusps ───────────────────────────────────────────────────────────
+    const cusps = data.house_cusps
+      ? data.house_cusps.map(c => normalize(c))
+      : Array.from({ length: 12 }, (_, i) => i * 30);
+
+    // Planet → house number (from astro_script)
+    const planetHouseNum = {};
     (data.astro_script || []).forEach(row => {
-      if (row.planet && row.house != null) planetHouseMap[row.planet] = row.house;
+      if (row.planet && row.house != null) planetHouseNum[row.planet] = row.house;
     });
 
-    // ── Aspect lines from projection_hits ────────────────────────────────────
-    const aspectLines = [];
-    const seenKeys = new Set();
+    // ── Which house each planet sits in ──────────────────────────────────────
+    const planetsByHouse = {};
+    Object.entries(planetLon).forEach(([name, lon]) => {
+      if (name === "Ascendant") return;
+      const h = getLonHouse(lon, cusps);
+      if (!planetsByHouse[h]) planetsByHouse[h] = [];
+      planetsByHouse[h].push({ name, lon });
+    });
 
-    (data.projection_hits || []).forEach(source => {
-      const srcName = source.source_planet;
-      const srcLon  = planetLonMap[srcName];
-      if (srcLon == null) return;
+    // ── Collect hit labels per house sector ───────────────────────────────────
+    // Each label: "Ab angle°" (e.g. "Su 45°")
+    // Assigned to the house containing the target (planet or box)
+    const houseLabels = {};
+    for (let i = 1; i <= 12; i++) houseLabels[i] = [];
 
-      (source.projections || []).forEach(proj => {
+    (data.projection_hits || []).forEach(src => {
+      const srcName = src.source_planet;
+      const srcAbbr = PLANET_ABBR[srcName] || srcName.slice(0, 2);
+
+      (src.projections || []).forEach(proj => {
         const angle = proj.angle;
-        const color = angleColor(angle);
+        const text  = `${srcAbbr} ${angle}°`;
+
+        // Hits to house boxes
+        (proj.hit_houses || []).forEach(hh => {
+          const h = hh.house;
+          houseLabels[h].push(text);
+        });
+
+        // Hits to planets → assign to house containing that planet
         (proj.hit_planets || []).forEach(hp => {
-          const targetLon = planetLonMap[hp.planet];
-          if (targetLon == null) return;
-          const key = [srcName, hp.planet, angle].sort().join("|");
-          if (seenKeys.has(key)) return;
-          seenKeys.add(key);
-          aspectLines.push({ fromLon: srcLon, toLon: targetLon, color });
+          const tgtLon = planetLon[hp.planet];
+          if (tgtLon == null) return;
+          const h = getLonHouse(tgtLon, cusps);
+          houseLabels[h].push(text);
         });
       });
     });
 
-    // Draw aspect lines
-    aspectLines.forEach(line => {
-      const p1 = polarToXY(cx, cy, Rinner, line.fromLon);
-      const p2 = polarToXY(cx, cy, Rinner, line.toLon);
+    // Deduplicate labels per house
+    Object.keys(houseLabels).forEach(h => {
+      houseLabels[h] = [...new Set(houseLabels[h])];
+    });
+
+    // ── Color palette for the 3 line types ───────────────────────────────────
+    const COLOR_RASHI_CIRCLE = "#1565c0";   // blue  — outer zodiac boundary circles
+    const COLOR_RASHI_LINE   = "#1976d2";   // blue  — rashi dividing lines (every 30°)
+    const COLOR_BOX_CIRCLE   = "#6a1b9a";   // purple — inner box boundary circle
+    const COLOR_BOX_LINE     = "#7b1fa2";   // purple — box / house cusp dividing lines
+    const COLOR_HIT_LINE     = "#b71c1c";   // red    — hit / aspect projection lines
+
+    // ── STEP 1: Draw outer rashi circle ───────────────────────────────────────
+    svg.appendChild(mk("circle", {
+      cx, cy, r: R_RASHI,
+      fill: "none", stroke: COLOR_RASHI_CIRCLE, "stroke-width": "2",
+    }));
+
+    // ── STEP 2: Draw 12 rashi dividing lines (every 30°, fixed zodiac) ────────
+    // Rashis are fixed: 0°=Aries, 30°=Taurus, ...
+    for (let i = 0; i < 12; i++) {
+      const deg = i * 30;
+      const p1  = polar(cx, cy, 0,       deg);
+      const p2  = polar(cx, cy, R_RASHI, deg);
       svg.appendChild(mk("line", {
-        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
-        stroke: line.color, "stroke-width": "1.5", opacity: "0.8",
+        x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
+        stroke: COLOR_RASHI_LINE, "stroke-width": "1.2",
       }));
-    });
+    }
 
-    // ── Draw planets with collision-aware label spreading ─────────────────────
-    // Sort by longitude
-    const planetEntries = Object.entries(planetLonMap)
-      .map(([name, lon]) => ({ name, lon, abbr: PLANET_ABBR[name] || name.slice(0, 2), houseNum: planetHouseMap[name] }))
-      .sort((a, b) => a.lon - b.lon);
+    // ── STEP 3: Rashi labels in the outer band ────────────────────────────────
+    for (let i = 0; i < 12; i++) {
+      const midDeg = i * 30 + 15; // midpoint of each rashi
+      const sp     = polar(cx, cy, (R_RASHI + R_RASHI_INNER) / 2, midDeg);
 
-    // Cluster planets within 10° of each other
-    const CLUSTER_DEG = 10;
-    const clusters = [];
-    planetEntries.forEach(p => {
-      const last = clusters[clusters.length - 1];
-      const lastLon = last ? last[last.length - 1].lon : null;
-      const diff = lastLon != null
-        ? Math.min(Math.abs(p.lon - lastLon), 360 - Math.abs(p.lon - lastLon))
-        : 999;
-      if (last && diff <= CLUSTER_DEG) {
-        last.push(p);
-      } else {
-        clusters.push([p]);
-      }
-    });
+      svg.appendChild(mk("text", {
+        x: sp.x, y: sp.y,
+        "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": "11", "font-weight": "600",
+        "font-family": "Arial,sans-serif", fill: COLOR_RASHI_LINE,
+        transform: `rotate(${midDeg}, ${sp.x}, ${sp.y})`,
+      }, SIGN_DISPLAY[i]));
+    }
 
-    clusters.forEach(cluster => {
-      const n = cluster.length;
-      // Mean lon of cluster for centering spread
-      const meanLon = cluster.reduce((s, p) => s + p.lon, 0) / n;
+    // ── STEP 4: Inner circle (box boundary) ───────────────────────────────────
+    svg.appendChild(mk("circle", {
+      cx, cy, r: R_RASHI_INNER,
+      fill: "none", stroke: COLOR_BOX_CIRCLE, "stroke-width": "2",
+    }));
 
-      cluster.forEach((p, i) => {
-        const label = p.houseNum != null ? `${p.houseNum} ${p.abbr}` : p.abbr;
+    // ── STEP 5: BOX lines — from center to R_BOX at each house cusp ──────────
+    for (let i = 0; i < 12; i++) {
+      const deg = cusps[i];
+      const p1  = polar(cx, cy, 0,      deg);
+      const p2  = polar(cx, cy, R_BOX,  deg);
+      svg.appendChild(mk("line", {
+        x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
+        stroke: COLOR_BOX_LINE, "stroke-width": "1.6",
+      }));
+    }
 
-        // Spread dots evenly around mean lon: e.g. 3 planets => -2.5°, 0°, +2.5°
-        const spreadLon = n > 1 ? meanLon + (i - (n - 1) / 2) * 3 : p.lon;
+    // ── STEP 6: House numbers and planet names inside boxes ───────────────────
+    for (let i = 0; i < 12; i++) {
+      const hNum     = i + 1;
+      const startDeg = cusps[i];
+      const endDeg   = cusps[(i + 1) % 12];
+      const mid      = midAngle(startDeg, endDeg);
 
-        const dotPos   = polarToXY(cx, cy, Rplanet, spreadLon);
-        // Each stacked label pushed 16px further out
-        const labelR   = Rlabel + i * 16;
-        const labelPos = polarToXY(cx, cy, labelR, spreadLon);
+      // House number in small circle
+      const hRad = R_BOX * 0.72;
+      const hp   = polar(cx, cy, hRad, mid);
+      svg.appendChild(mk("circle", { cx:hp.x, cy:hp.y, r:14, fill:"#fffdf5", stroke:"#888", "stroke-width":"0.8" }));
+      svg.appendChild(mk("text", {
+        x:hp.x, y:hp.y,
+        "text-anchor":"middle", "dominant-baseline":"central",
+        "font-size":"11", "font-weight":"700",
+        "font-family":"Georgia,serif", fill:"#222",
+      }, String(hNum)));
 
-        // Leader line from dot to label when stacked
-        if (n > 1) {
-          svg.appendChild(mk("line", {
-            x1: dotPos.x, y1: dotPos.y,
-            x2: labelPos.x, y2: labelPos.y,
-            stroke: "#bbb", "stroke-width": "0.8", "stroke-dasharray": "2 2",
-          }));
-        }
-
-        // Dot
-        svg.appendChild(mk("circle", {
-          cx: dotPos.x, cy: dotPos.y, r: "4",
-          fill: "#1a1a2e", stroke: "#fff", "stroke-width": "1.5",
-        }));
-
-        // Label
+      // Planet abbreviations in this house
+      const planets = planetsByHouse[hNum] || [];
+      const n       = planets.length;
+      planets.forEach((p, pi) => {
+        const abbr   = PLANET_ABBR[p.name] || p.name.slice(0, 2);
+        const angOff = n === 1 ? 0 : (pi - (n - 1) / 2) * 8;
+        const pRad   = R_BOX * 0.45;
+        const lp     = polar(cx, cy, pRad, mid + angOff);
         svg.appendChild(mk("text", {
-          x: labelPos.x, y: labelPos.y,
-          "text-anchor": "middle", "dominant-baseline": "central",
-          "font-size": "10", "font-weight": "700",
-          "font-family": "Arial, sans-serif", fill: "#1a1a2e",
-        }, label));
+          x:lp.x, y:lp.y,
+          "text-anchor":"middle", "dominant-baseline":"central",
+          "font-size":"12", "font-weight":"700",
+          "font-family":"Arial,sans-serif", fill:"#111",
+        }, abbr));
+      });
+    }
+
+    // ── STEP 7: HIT LINES from center outward ─────────────────────────────────
+    // For each hit (planet→planet or planet→house), draw a line from center
+    // to the OUTER circle edge (R_RASHI) at the target longitude.
+    // Target longitude = the projected longitude (source + angle)
+    // This makes lines go from center to the edge like spokes showing where hits land.
+
+    // We draw lines at the PROJECTED longitude (= source longitude + aspect angle)
+    // so each line points to where the aspect energy lands.
+
+    const drawnHitLines = new Set();
+
+    (data.projection_hits || []).forEach(src => {
+      const srcName = src.source_planet;
+      const srcLon  = planetLon[srcName];
+      if (srcLon == null) return;
+
+      (src.projections || []).forEach(proj => {
+        const angle       = proj.angle;
+        const projLon     = normalize(srcLon + angle);
+        const lineKey     = `${Math.round(projLon)}`;
+
+        // Only draw one line per unique projected longitude (to avoid overdraw)
+        if (drawnHitLines.has(lineKey)) return;
+        drawnHitLines.add(lineKey);
+
+        // Only draw if there's actually something hit
+        const hasHit = (proj.hit_planets?.length > 0) || (proj.hit_houses?.length > 0);
+        if (!hasHit) return;
+
+        const R_HIT_START = 0;    // still from center
+        const R_HIT_END   = 340;  // was R_RASHI=280, now extends 60px beyond the outer ring
+
+        const p1 = polar(cx, cy, R_HIT_START, projLon);
+        const p2 = polar(cx, cy, R_HIT_END,   projLon);
+        svg.appendChild(mk("line", {
+          x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
+          stroke: "black",
+          "stroke-width": "1.4",   // was 0.9 or 1.2
+          opacity: "0.8",
+        }));
       });
     });
 
-    // ── Legend ────────────────────────────────────────────────────────────────
-    const legendEntries = [
-      { angle: 0,   label: "Conj"  },
-      { angle: 60,  label: "Sext"  },
-      { angle: 90,  label: "Sq"    },
-      { angle: 120, label: "Trine" },
-      { angle: 180, label: "Opp"   },
-    ];
-    legendEntries.forEach(({ angle, label }, i) => {
-      const lx = 14, ly = 18 + i * 18;
-      svg.appendChild(mk("line", { x1: lx, y1: ly, x2: lx + 22, y2: ly, stroke: ANGLE_COLOR[angle], "stroke-width": "2.5" }));
-      svg.appendChild(mk("text", {
-        x: lx + 28, y: ly, "dominant-baseline": "central",
-        "font-size": "9.5", "font-family": "Arial, sans-serif", fill: "#444",
-      }, `${label} ${angle}°`));
-    });
+    // ── STEP 8: Hit labels OUTSIDE the circle ─────────────────────────────────
+    // Per house sector: stack labels radially outward from R_LABEL
+    for (let i = 0; i < 12; i++) {
+      const hNum     = i + 1;
+      const startDeg = cusps[i];
+      const endDeg   = cusps[(i + 1) % 12];
+      const mid      = midAngle(startDeg, endDeg);
 
-    // Centre label
+      const labels = houseLabels[hNum] || [];
+      if (labels.length === 0) continue;
+
+      labels.forEach((lbl, li) => {
+        const r  = R_LABEL + li * 14;
+        const lp = polar(cx, cy, r, mid);
+
+        svg.appendChild(mk("text", {
+          x: lp.x, y: lp.y,
+          "text-anchor": "middle", "dominant-baseline": "central",
+          "font-size": "14", "font-weight": "600",
+          "font-family": "Arial,sans-serif", fill: "#111",
+          transform: `rotate(${mid}, ${lp.x}, ${lp.y})`,
+        }, lbl));
+      });
+    }
+
+    // ── Title ─────────────────────────────────────────────────────────────────
     svg.appendChild(mk("text", {
-      x: cx, y: cy - 8, "text-anchor": "middle",
-      "font-size": "11", "font-family": "Georgia, serif", fill: "#8b6914", opacity: "0.8",
-    }, "WESTERN"));
+      x:cx, y:18,
+      "text-anchor":"middle",
+      "font-size":"13", "font-weight":"600",
+      "font-family":"Arial,sans-serif", fill:"#222",
+    }, "Planet Hits on Planets and Boxes (Life Contexts)"));
+
+    // ── Centre watermark ──────────────────────────────────────────────────────
     svg.appendChild(mk("text", {
-      x: cx, y: cy + 8, "text-anchor": "middle",
-      "font-size": "11", "font-family": "Georgia, serif", fill: "#8b6914", opacity: "0.8",
-    }, "HIT CHART"));
+      x:cx, y:cy,
+      "text-anchor":"middle", "dominant-baseline":"central",
+      "font-size":"8", "font-family":"Arial,sans-serif", fill:"#ccc",
+    }, "©2020 Dr. Khushdeep Bansal"));
+
+    
 
   }, [data]);
 
   if (!data) return null;
 
   return (
-    <div style={{ textAlign: "center", width: "100%" }}>
+    <div style={{ textAlign:"center", width:"100%", background:"#fffdf5", borderRadius:8 }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 500 550"
+        viewBox="0 0 960 960"
         width="100%"
-        style={{ maxWidth: 700, display: "block", margin: "0 auto" }}
+        style={{ maxWidth:960, display:"block", margin:"0 auto" }}
       />
     </div>
   );

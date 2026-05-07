@@ -7,6 +7,8 @@ import KPNakshatraTable from "@/components/KPNakshatraTable";
 import PlanetKPTable from "@/components/PlanetKPTable";
 import WesternHitChart from "@/components/HitChart";
 import PrashnaKundali from "@/components/PrashnaKundali";
+import MahadashaTable from "@/components/MahadashaTable";
+import PersonDetails from "@/components/PersonDetails";
 
 // ── Astrology helpers ─────────────────────────────────────────────────────────
 
@@ -1136,6 +1138,7 @@ export default function ChartsPage() {
                 <p className="text-[10px] tracking-[0.18em] uppercase text-amber-700/60 font-semibold">Astro Details</p>
               </div>
               <div className="px-5 pb-5 pt-3">
+                <PersonDetails payload={payload} data={dashaData} /> 
                 <AstroScriptTable data={dashaData} />
               </div>
             </div>
@@ -1152,6 +1155,7 @@ export default function ChartsPage() {
         return (
           <div className="grid grid-cols-1 xl:grid-cols-1 gap-4 items-start">
             <TimeLineTable dashaData={dashaData} />
+            <MahadashaTable data={dashaData} />
           </div>
         );
       default:
