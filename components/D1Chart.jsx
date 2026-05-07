@@ -360,13 +360,15 @@ export default function D1Chart({ data }) {
     // Ascendant marker always in house 1
     housePlanets[1].push({ label:"As", retro:false, lon:lagnaLon });
 
-    planetPosition.forEach((p) => {
-      const lon   = parseFloat(p.longitude ?? p.lon ?? p.absolute_longitude ?? 0);
-      const house = getVedicHouse(lon, lagnaLon);          // ← Vedic logic
-      const label = PLANET_SHORT[p.name] || p.name.slice(0, 2);
-      const retro = !!(p.retrograde || p.is_retrograde);
-      housePlanets[house].push({ label, retro, lon });
-    });
+    planetPosition
+  .filter((p) => p.name !== "Ascendant" && p.name !== "Lagna")
+  .forEach((p) => {
+    const lon   = parseFloat(p.longitude ?? p.lon ?? p.absolute_longitude ?? 0);
+    const house = getVedicHouse(lon, lagnaLon);
+    const label = PLANET_SHORT[p.name] || p.name.slice(0, 2);
+    const retro = !!(p.retrograde || p.is_retrograde);
+    housePlanets[house].push({ label, retro, lon });
+  });
 
     // ── Render each house ─────────────────────────────────────────────────────
     for (let house = 1; house <= 12; house++) {
@@ -400,7 +402,7 @@ export default function D1Chart({ data }) {
         const startY = by - ((ps.length - 1) * lineH) / 2;
 
         ps.forEach((p, pi) => {
-          const short = p.label + (p.retro ? "℞" : "");
+          const short = p.label + ((p.retro || p.label === "Ra" || p.label === "Ke") ? "(℞)" : "");
           const dm    = degMinStr(p.lon);
           const rashi = RASHI_SHORT[signIndexOf(p.lon)];
           const line  = `${short} ${dm} ${rashi}`;
