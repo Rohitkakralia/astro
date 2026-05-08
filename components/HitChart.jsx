@@ -23,7 +23,6 @@ const SIGN_DISPLAY = [
 
 function normalize(d) { return ((parseFloat(d) % 360) + 360) % 360; }
 
-// 0° Aries = top, increasing clockwise
 function polar(cx, cy, r, lonDeg) {
   const rad = (lonDeg - 90) * Math.PI / 180;
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
@@ -75,20 +74,31 @@ export default function WesternHitChart({ data }) {
     };
 
     // ── Canvas & Radii ────────────────────────────────────────────────────────
-    // Large enough that outside labels don't clip
     const W = 960, H = 960;
     const cx = W / 2, cy = H / 2;
 
-    // Three concentric circles:
-    // R_RASHI  = outer circle → rashi (zodiac) labels live in the band between R_RASHI and R_BOX
-    // R_BOX    = box/house boundary circle → box lines go from center to here
-    // R_CENTER = hub at center (just a dot reference, no circle drawn)
+    const R_RASHI       = 380;  // outer zodiac ring circle
+    const R_RASHI_INNER = 320;  // inner edge of rashi band = outer edge of box area
+    const R_BOX         = 320;  // box/house boundary (same as R_RASHI_INNER)
+    const R_HIT_END     = 440;  // hit lines extend beyond outer circle
+    const R_LABEL_START = R_RASHI + 20; // where outside hit labels start (400)
+    const LABEL_STEP    = 16;   // px between stacked labels radially
 
-    const R_RASHI      = 280;   // outer zodiac ring
-    const R_RASHI_INNER= 230;   // inner edge of rashi label band
-    const R_BOX        = 230;   // box boundary = same as rashi inner
-    const R_HUB        = 0;     // lines go from exact center
-    const R_LABEL      = R_RASHI + 16; // where outside labels start
+    // Derived positions inside the box area (0 → R_BOX = 320)
+    const R_HOUSE_NUM   = R_BOX * 0.76;  // ≈ 243 — house number circles
+    const R_PLANET      = R_BOX * 0.50;  // ≈ 160 — planet abbreviations
+    const R_PLANET_INNER= R_BOX * 0.30;  // ≈ 96  — second row planets (if crowded)
+
+    // ── Colors ────────────────────────────────────────────────────────────────
+    const COLOR_RASHI_CIRCLE = "#1565c0";  // blue  — outer zodiac boundary circles
+    const COLOR_RASHI_LINE   = "#1976d2";  // blue  — rashi dividing lines (every 30°)
+    const COLOR_RASHI_TEXT   = "#1565c0";  // blue  — rashi sign labels
+    const COLOR_BOX_CIRCLE   = "#6a1b9a";  // purple — inner box boundary circle
+    const COLOR_BOX_LINE     = "#7b1fa2";  // purple — box / house cusp dividing lines
+    const COLOR_HIT_LINE     = "#111111";  // red   — hit / aspect projection lines
+    const COLOR_HIT_LABEL    = "#111111";  // red   — hit labels outside circle
+    const COLOR_PLANET_TEXT  = "#111111";  // dark  — planet abbreviations
+    const COLOR_HOUSE_NUM    = "#222222";  // dark  — house numbers
 
     // ── Background ────────────────────────────────────────────────────────────
     svg.appendChild(mk("rect", { x:0, y:0, width:W, height:H, fill:"#fffdf5" }));
@@ -121,12 +131,6 @@ export default function WesternHitChart({ data }) {
       ? data.house_cusps.map(c => normalize(c))
       : Array.from({ length: 12 }, (_, i) => i * 30);
 
-    // Planet → house number (from astro_script)
-    const planetHouseNum = {};
-    (data.astro_script || []).forEach(row => {
-      if (row.planet && row.house != null) planetHouseNum[row.planet] = row.house;
-    });
-
     // ── Which house each planet sits in ──────────────────────────────────────
     const planetsByHouse = {};
     Object.entries(planetLon).forEach(([name, lon]) => {
@@ -137,55 +141,51 @@ export default function WesternHitChart({ data }) {
     });
 
     // ── Collect hit labels per house sector ───────────────────────────────────
-    // Each label: "Ab angle°" (e.g. "Su 45°")
-    // Assigned to the house containing the target (planet or box)
-    const houseLabels = {};
-    for (let i = 1; i <= 12; i++) houseLabels[i] = [];
+    // ── Collect hit labels per house sector ───────────────────────────────────
+const houseLabels = {};
+for (let i = 1; i <= 12; i++) houseLabels[i] = [];
 
-    (data.projection_hits || []).forEach(src => {
-      const srcName = src.source_planet;
-      const srcAbbr = PLANET_ABBR[srcName] || srcName.slice(0, 2);
+(data.projection_hits || []).forEach(src => {
+  const srcName = src.source_planet;
+  const srcAbbr = PLANET_ABBR[srcName] || srcName.slice(0, 2);
 
-      (src.projections || []).forEach(proj => {
-        const angle = proj.angle;
-        const text  = `${srcAbbr} ${angle}°`;
+  (src.projections || []).forEach(proj => {
+    const angle = proj.angle;
 
-        // Hits to house boxes
-        (proj.hit_houses || []).forEach(hh => {
-          const h = hh.house;
-          houseLabels[h].push(text);
-        });
-
-        // Hits to planets → assign to house containing that planet
-        (proj.hit_planets || []).forEach(hp => {
-          const tgtLon = planetLon[hp.planet];
-          if (tgtLon == null) return;
-          const h = getLonHouse(tgtLon, cusps);
-          houseLabels[h].push(text);
-        });
-      });
+    // Hits to house boxes — format: "(H3) Sa 90°"
+    (proj.hit_houses || []).forEach(hh => {
+      const text = `(H${hh.house}) ${srcAbbr} ${angle}°`;
+      houseLabels[hh.house].push(text);
     });
+
+    // Hits to planets — format: "(Ke) Sa 90°"
+    (proj.hit_planets || []).forEach(hp => {
+      const tgtLon = planetLon[hp.planet];
+      if (tgtLon == null) return;
+      const tgtAbbr = PLANET_ABBR[hp.planet] || hp.planet.slice(0, 2);
+      const h = getLonHouse(tgtLon, cusps);
+      const text = `(${tgtAbbr}) ${srcAbbr} ${angle}°`;
+      houseLabels[h].push(text);
+    });
+  });
+});
 
     // Deduplicate labels per house
     Object.keys(houseLabels).forEach(h => {
       houseLabels[h] = [...new Set(houseLabels[h])];
     });
 
-    // ── Color palette for the 3 line types ───────────────────────────────────
-    const COLOR_RASHI_CIRCLE = "#1565c0";   // blue  — outer zodiac boundary circles
-    const COLOR_RASHI_LINE   = "#1976d2";   // blue  — rashi dividing lines (every 30°)
-    const COLOR_BOX_CIRCLE   = "#6a1b9a";   // purple — inner box boundary circle
-    const COLOR_BOX_LINE     = "#7b1fa2";   // purple — box / house cusp dividing lines
-    const COLOR_HIT_LINE     = "#b71c1c";   // red    — hit / aspect projection lines
+    // ═════════════════════════════════════════════════════════════════════════
+    // DRAW ORDER (back → front)
+    // ═════════════════════════════════════════════════════════════════════════
 
-    // ── STEP 1: Draw outer rashi circle ───────────────────────────────────────
+    // ── 1. Outer rashi circle (BLUE) ──────────────────────────────────────────
     svg.appendChild(mk("circle", {
       cx, cy, r: R_RASHI,
       fill: "none", stroke: COLOR_RASHI_CIRCLE, "stroke-width": "2",
     }));
 
-    // ── STEP 2: Draw 12 rashi dividing lines (every 30°, fixed zodiac) ────────
-    // Rashis are fixed: 0°=Aries, 30°=Taurus, ...
+    // ── 2. Rashi dividing lines every 30° (BLUE, full length center→outer) ───
     for (let i = 0; i < 12; i++) {
       const deg = i * 30;
       const p1  = polar(cx, cy, 0,       deg);
@@ -196,81 +196,39 @@ export default function WesternHitChart({ data }) {
       }));
     }
 
-    // ── STEP 3: Rashi labels in the outer band ────────────────────────────────
+    // ── 3. Rashi sign labels in outer band ───────────────────────────────────
     for (let i = 0; i < 12; i++) {
-      const midDeg = i * 30 + 15; // midpoint of each rashi
-      const sp     = polar(cx, cy, (R_RASHI + R_RASHI_INNER) / 2, midDeg);
+      const midDeg = i * 30 + 15;
+      const r      = (R_RASHI + R_RASHI_INNER) / 2;  // ≈ 350
+      const sp     = polar(cx, cy, r, midDeg);
 
       svg.appendChild(mk("text", {
         x: sp.x, y: sp.y,
         "text-anchor": "middle", "dominant-baseline": "central",
-        "font-size": "11", "font-weight": "600",
-        "font-family": "Arial,sans-serif", fill: COLOR_RASHI_LINE,
+        "font-size": "13", "font-weight": "700",
+        "font-family": "Arial,sans-serif", fill: COLOR_RASHI_TEXT,
         transform: `rotate(${midDeg}, ${sp.x}, ${sp.y})`,
       }, SIGN_DISPLAY[i]));
     }
 
-    // ── STEP 4: Inner circle (box boundary) ───────────────────────────────────
+    // ── 4. Inner box boundary circle (PURPLE) ────────────────────────────────
     svg.appendChild(mk("circle", {
-      cx, cy, r: R_RASHI_INNER,
+      cx, cy, r: R_BOX,
       fill: "none", stroke: COLOR_BOX_CIRCLE, "stroke-width": "2",
     }));
 
-    // ── STEP 5: BOX lines — from center to R_BOX at each house cusp ──────────
+    // ── 5. Box / house cusp lines (PURPLE, center → R_BOX) ───────────────────
     for (let i = 0; i < 12; i++) {
       const deg = cusps[i];
-      const p1  = polar(cx, cy, 0,      deg);
-      const p2  = polar(cx, cy, R_BOX,  deg);
+      const p1  = polar(cx, cy, 0,     deg);
+      const p2  = polar(cx, cy, R_BOX, deg);
       svg.appendChild(mk("line", {
         x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
-        stroke: COLOR_BOX_LINE, "stroke-width": "1.6",
+        stroke: COLOR_BOX_LINE, "stroke-width": "1.8",
       }));
     }
 
-    // ── STEP 6: House numbers and planet names inside boxes ───────────────────
-    for (let i = 0; i < 12; i++) {
-      const hNum     = i + 1;
-      const startDeg = cusps[i];
-      const endDeg   = cusps[(i + 1) % 12];
-      const mid      = midAngle(startDeg, endDeg);
-
-      // House number in small circle
-      const hRad = R_BOX * 0.72;
-      const hp   = polar(cx, cy, hRad, mid);
-      svg.appendChild(mk("circle", { cx:hp.x, cy:hp.y, r:14, fill:"#fffdf5", stroke:"#888", "stroke-width":"0.8" }));
-      svg.appendChild(mk("text", {
-        x:hp.x, y:hp.y,
-        "text-anchor":"middle", "dominant-baseline":"central",
-        "font-size":"11", "font-weight":"700",
-        "font-family":"Georgia,serif", fill:"#222",
-      }, String(hNum)));
-
-      // Planet abbreviations in this house
-      const planets = planetsByHouse[hNum] || [];
-      const n       = planets.length;
-      planets.forEach((p, pi) => {
-        const abbr   = PLANET_ABBR[p.name] || p.name.slice(0, 2);
-        const angOff = n === 1 ? 0 : (pi - (n - 1) / 2) * 8;
-        const pRad   = R_BOX * 0.45;
-        const lp     = polar(cx, cy, pRad, mid + angOff);
-        svg.appendChild(mk("text", {
-          x:lp.x, y:lp.y,
-          "text-anchor":"middle", "dominant-baseline":"central",
-          "font-size":"12", "font-weight":"700",
-          "font-family":"Arial,sans-serif", fill:"#111",
-        }, abbr));
-      });
-    }
-
-    // ── STEP 7: HIT LINES from center outward ─────────────────────────────────
-    // For each hit (planet→planet or planet→house), draw a line from center
-    // to the OUTER circle edge (R_RASHI) at the target longitude.
-    // Target longitude = the projected longitude (source + angle)
-    // This makes lines go from center to the edge like spokes showing where hits land.
-
-    // We draw lines at the PROJECTED longitude (= source longitude + aspect angle)
-    // so each line points to where the aspect energy lands.
-
+    // ── 6. Hit lines (RED, center → beyond outer circle) ─────────────────────
     const drawnHitLines = new Set();
 
     (data.projection_hits || []).forEach(src => {
@@ -279,34 +237,85 @@ export default function WesternHitChart({ data }) {
       if (srcLon == null) return;
 
       (src.projections || []).forEach(proj => {
-        const angle       = proj.angle;
-        const projLon     = normalize(srcLon + angle);
-        const lineKey     = `${Math.round(projLon)}`;
+        const angle   = proj.angle;
+        const projLon = normalize(srcLon + angle);
+        const lineKey = String(Math.round(projLon * 10)); // 0.1° precision key
 
-        // Only draw one line per unique projected longitude (to avoid overdraw)
         if (drawnHitLines.has(lineKey)) return;
-        drawnHitLines.add(lineKey);
 
-        // Only draw if there's actually something hit
         const hasHit = (proj.hit_planets?.length > 0) || (proj.hit_houses?.length > 0);
         if (!hasHit) return;
 
-        const R_HIT_START = 0;    // still from center
-        const R_HIT_END   = 340;  // was R_RASHI=280, now extends 60px beyond the outer ring
+        drawnHitLines.add(lineKey);
 
-        const p1 = polar(cx, cy, R_HIT_START, projLon);
-        const p2 = polar(cx, cy, R_HIT_END,   projLon);
+        const p1 = polar(cx, cy, 0,          projLon);
+        const p2 = polar(cx, cy, R_HIT_END,  projLon);
         svg.appendChild(mk("line", {
           x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
-          stroke: "black",
-          "stroke-width": "1.4",   // was 0.9 or 1.2
-          opacity: "0.8",
+          stroke: COLOR_HIT_LINE, "stroke-width": "1.4", opacity: "0.85",
         }));
       });
     });
 
-    // ── STEP 8: Hit labels OUTSIDE the circle ─────────────────────────────────
-    // Per house sector: stack labels radially outward from R_LABEL
+    // ── 7. House numbers & planet names (drawn last so they sit on top) ───────
+    for (let i = 0; i < 12; i++) {
+      const hNum     = i + 1;
+      const startDeg = cusps[i];
+      const endDeg   = cusps[(i + 1) % 12];
+      const mid      = midAngle(startDeg, endDeg);
+
+      // House number circle — positioned at 76% of box radius
+      const hp = polar(cx, cy, R_HOUSE_NUM, mid);
+      svg.appendChild(mk("circle", {
+        cx: hp.x, cy: hp.y, r: 16,
+        fill: "#fffdf5", stroke: "#999", "stroke-width": "1",
+      }));
+      svg.appendChild(mk("text", {
+        x: hp.x, y: hp.y,
+        "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": "12", "font-weight": "700",
+        "font-family": "Georgia,serif", fill: COLOR_HOUSE_NUM,
+      }, String(hNum)));
+
+      // Planet abbreviations — positioned at 50% of box radius
+      const planets = planetsByHouse[hNum] || [];
+      const n       = planets.length;
+
+      planets.forEach((p, pi) => {
+        const abbr = PLANET_ABBR[p.name] || p.name.slice(0, 2);
+
+        // For >3 planets, alternate inner/outer radius to avoid overlap
+        const rPlanet = (n <= 3)
+          ? R_PLANET
+          : (pi % 2 === 0 ? R_PLANET : R_PLANET_INNER);
+
+        // Angular offset spreads planets within the sector
+        const totalSpread = Math.min(n * 7, 20); // max ±20°
+        const angOff = n === 1 ? 0 : (pi - (n - 1) / 2) * (totalSpread / (n - 1));
+
+        const lp = polar(cx, cy, rPlanet, mid + angOff);
+
+        // White halo behind text for readability over lines
+        svg.appendChild(mk("text", {
+          x: lp.x, y: lp.y,
+          "text-anchor": "middle", "dominant-baseline": "central",
+          "font-size": "13", "font-weight": "700",
+          "font-family": "Arial,sans-serif",
+          fill: "white", stroke: "white", "stroke-width": "3",
+          "paint-order": "stroke",
+        }, abbr));
+
+        svg.appendChild(mk("text", {
+          x: lp.x, y: lp.y,
+          "text-anchor": "middle", "dominant-baseline": "central",
+          "font-size": "13", "font-weight": "700",
+          "font-family": "Arial,sans-serif", fill: COLOR_PLANET_TEXT,
+        }, abbr));
+      });
+    }
+
+    // ── 8. Hit labels OUTSIDE the outer circle ────────────────────────────────
+    // Stacked radially outward per house sector midpoint
     for (let i = 0; i < 12; i++) {
       const hNum     = i + 1;
       const startDeg = cusps[i];
@@ -317,35 +326,65 @@ export default function WesternHitChart({ data }) {
       if (labels.length === 0) continue;
 
       labels.forEach((lbl, li) => {
-        const r  = R_LABEL + li * 14;
+        const r  = R_LABEL_START + li * LABEL_STEP;
         const lp = polar(cx, cy, r, mid);
+
+        // White halo for readability
+        svg.appendChild(mk("text", {
+          x: lp.x, y: lp.y,
+          "text-anchor": "middle", "dominant-baseline": "central",
+          "font-size": "10", "font-weight": "700",
+          "font-family": "Arial,sans-serif",
+          fill: "white", stroke: "white", "stroke-width": "2.5",
+          "paint-order": "stroke",
+          transform: `rotate(${mid}, ${lp.x}, ${lp.y})`,
+        }, lbl));
 
         svg.appendChild(mk("text", {
           x: lp.x, y: lp.y,
           "text-anchor": "middle", "dominant-baseline": "central",
-          "font-size": "14", "font-weight": "600",
-          "font-family": "Arial,sans-serif", fill: "#111",
+          "font-size": "10", "font-weight": "700",
+          "font-family": "Arial,sans-serif", fill: COLOR_HIT_LABEL,
           transform: `rotate(${mid}, ${lp.x}, ${lp.y})`,
         }, lbl));
       });
     }
 
-    // ── Title ─────────────────────────────────────────────────────────────────
+    // ── 9. Title ──────────────────────────────────────────────────────────────
     svg.appendChild(mk("text", {
-      x:cx, y:18,
-      "text-anchor":"middle",
-      "font-size":"13", "font-weight":"600",
-      "font-family":"Arial,sans-serif", fill:"#222",
+      x: cx, y: 22,
+      "text-anchor": "middle",
+      "font-size": "14", "font-weight": "700",
+      "font-family": "Arial,sans-serif", fill: "#222",
     }, "Planet Hits on Planets and Boxes (Life Contexts)"));
 
-    // ── Centre watermark ──────────────────────────────────────────────────────
+    // ── 10. Centre watermark ──────────────────────────────────────────────────
     svg.appendChild(mk("text", {
-      x:cx, y:cy,
-      "text-anchor":"middle", "dominant-baseline":"central",
-      "font-size":"8", "font-family":"Arial,sans-serif", fill:"#ccc",
+      x: cx, y: cy - 8,
+      "text-anchor": "middle", "dominant-baseline": "central",
+      "font-size": "9", "font-family": "Arial,sans-serif", fill: "#ddd",
     }, "©2020 Dr. Khushdeep Bansal"));
+    svg.appendChild(mk("text", {
+      x: cx, y: cy + 8,
+      "text-anchor": "middle", "dominant-baseline": "central",
+      "font-size": "8", "font-family": "Arial,sans-serif", fill: "#ddd",
+    }, "www.mahavastu.com"));
 
-    
+    // ── 11. Color legend ──────────────────────────────────────────────────────
+    const legend = [
+      { color: COLOR_RASHI_LINE, label: "Rashi dividing lines" },
+      { color: COLOR_BOX_LINE,   label: "Box / house cusp lines" },
+      { color: COLOR_HIT_LINE,   label: "Hit / aspect lines" },
+    ];
+    legend.forEach(({ color, label }, i) => {
+      const lx = 14, ly = H - 56 + i * 18;
+      svg.appendChild(mk("line", { x1:lx, y1:ly, x2:lx+24, y2:ly, stroke:color, "stroke-width":"2.5" }));
+      svg.appendChild(mk("text", {
+        x: lx + 30, y: ly,
+        "dominant-baseline": "central",
+        "font-size": "10", "font-family": "Arial,sans-serif", fill: "#444",
+      }, label));
+    });
 
   }, [data]);
 
@@ -357,7 +396,7 @@ export default function WesternHitChart({ data }) {
         ref={svgRef}
         viewBox="0 0 960 960"
         width="100%"
-        style={{ maxWidth:960, display:"block", margin:"0 auto" }}
+        style={{ display:"block", margin:"0 auto" }}
       />
     </div>
   );

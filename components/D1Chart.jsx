@@ -262,7 +262,7 @@ export default function D1Chart({ data }) {
     svg.innerHTML = "";
     const NS = "http://www.w3.org/2000/svg";
 
-    const W = 560, H = 340;
+    const W = 600, H = 400;  
 
     // Helper to create SVG elements
     const mk = (tag, attrs, text) => {
@@ -436,13 +436,14 @@ export default function D1Chart({ data }) {
 
   if (!data) return null;
 
-  return (
-    <svg
-      ref={svgRef}
-      viewBox="0 0 560 340"
-      width="100%"
-      height="100%"
-      className="block w-full"
-    />
-  );
+return (
+  <svg
+    ref={svgRef}
+    viewBox="0 0 600 400"
+    preserveAspectRatio="xMidYMid meet"
+    width="100%"
+    height="100%"
+    className="block w-full h-full"
+  />
+);
 }

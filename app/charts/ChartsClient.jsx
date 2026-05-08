@@ -9,6 +9,9 @@ import WesternHitChart from "@/components/HitChart";
 import PrashnaKundali from "@/components/PrashnaKundali";
 import MahadashaTable from "@/components/MahadashaTable";
 import PersonDetails from "@/components/PersonDetails";
+import AstroScriptTableSecond from "@/components/AstroScriptTable-differentFormate";
+import AstroScriptTableThird from "@/components/AstroScriptThird";
+import TransiteChart from "@/components/Transite";
 
 // ── Astrology helpers ─────────────────────────────────────────────────────────
 
@@ -267,7 +270,7 @@ function CuspKundaliSVG({ planets = [], houseCusps = [], lagnaSignIdx = 0 }) {
             const z = degreeToZodiac(lon);
             const deg = z.deg;
             const min = String(z.min).padStart(2, "0");
-            label = `${short} ${deg}°${min}' ${RASHI_SHORT[z.signIndex]}`;
+            label = `${short}${deg}°${min}'${RASHI_SHORT[z.signIndex]}`;
           }
           svg.appendChild(
             el(
@@ -305,7 +308,8 @@ function CuspKundaliSVG({ planets = [], houseCusps = [], lagnaSignIdx = 0 }) {
     );
   }, [planets, houseCusps, lagnaSignIdx]);
 
-  return <svg ref={svgRef} viewBox={`0 10 600 400`} width="100%" height="100%" className="block w-full" />;
+  return <svg ref={svgRef} viewBox="0 0 600 400" width="100%" height="100%" className="block w-full" />
+
 }
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
@@ -339,6 +343,8 @@ const TABS = [
   { id: "astro", label: "Astro Details", icon: "📜" },
   { id: "kp", label: "KP Details", icon: "⭐" },
   { id: "dashas", label: "Dashas", icon: "⏳" },
+  { id: "personalDetails", label: "Personal Details", icon: "⏳" },
+  { id: "education", label: "Education", icon: "📜" },
 ];
 
 function TabBar({ activeTab, onTabChange }) {
@@ -997,6 +1003,12 @@ export default function ChartsPage() {
   const [planetsLoading, setPlanetsLoading] = useState(false);
   const [planetsError, setPlanetsError] = useState(null);
 
+
+  const [transitData,    setTransitData]    = useState(null);
+const [transitLoading, setTransitLoading] = useState(false);
+const [transitError,   setTransitError]   = useState(null);
+
+
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = PRINT_CSS;
@@ -1047,8 +1059,48 @@ export default function ChartsPage() {
         setPlanetsLoading(false);
       }
     }
+
+    // ── Transit chart fetch (current time, same coordinates) ───────────────
+async function fetchTransit() {
+  setTransitLoading(true);
+  setTransitError(null);
+  try {
+    // Build current datetime in the same ISO+offset format as birth chart
+    const offsetMin = payload.utcOffsetMin;
+    const sign = offsetMin >= 0 ? "+" : "-";
+    const absMin = Math.abs(offsetMin);
+    const offH = String(Math.floor(absMin / 60)).padStart(2, "0");
+    const offM = String(absMin % 60).padStart(2, "0");
+
+    const now = new Date();
+    const localNow = new Date(now.getTime() + offsetMin * 60 * 1000);
+    const currentDate = localNow.toISOString().split("T")[0]; // YYYY-MM-DD
+    const currentTime = [
+      String(localNow.getUTCHours()).padStart(2, "0"),
+      String(localNow.getUTCMinutes()).padStart(2, "0"),
+      "00",
+    ].join(":");
+
+    const isoDatetime = `${currentDate}T${currentTime}${sign}${offH}:${offM}`;
+
+    const url = `/api/planets?ayanamsa=1&coordinates=${encodeURIComponent(`${payload.lat},${payload.lon}`)}&datetime=${encodeURIComponent(isoDatetime)}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!res.ok || !json.success)
+      throw new Error(json?.errors?.join(", ") || json?.error || "Failed to fetch transit positions");
+    setTransitData(json.data ?? null);
+  } catch (err) {
+    setTransitError(err.message);
+  } finally {
+    setTransitLoading(false);
+  }
+}
+    fetchTransit();
     fetchPlanets();
   }, [payload]);
+
+  
+
 
   if (error) return <ErrorScreen message={error} onBack={() => router.push("/")} />;
   if (!payload) return null;
@@ -1072,29 +1124,45 @@ export default function ChartsPage() {
           <>
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="rounded-xl overflow-hidden">
-                <div className="px-4 pt-3 pb-1 flex items-center gap-3">
-                  <p className="text-xs font-bold text-red-700 tracking-wide">Cusp Kundli</p>
-                  <p className="text-[10px] text-amber-700/40">{ZODIAC_SIGNS[lagnaSignIdx]} Lagna · ℞ = retrograde</p>
-                </div>
-                <div className="w-full h-full">
-                  <CuspKundaliSVG planets={planets} houseCusps={houseCusps} lagnaSignIdx={lagnaSignIdx} />
-                </div>
-              </div>
-              <div className="rounded-xl overflow-hidden">
-                <div className="px-4 pt-3 pb-1 flex items-center gap-3">
-                  <p className="text-xs font-bold text-red-700 tracking-wide">Lagan Kundali</p>
-                  <p className="text-[10px] text-amber-700/40">D1 Chart</p>
-                </div>
-                <div className="w-full">
-                  <D1Chart data={dashaData} />
-                </div>
-              </div>
-            </div>
+  <div className="rounded-xl overflow-hidden flex flex-col">
+    <div className="px-4 pt-3 pb-1 flex items-center gap-3">
+      <p className="text-xs font-bold text-red-700 tracking-wide">Cusp Kundli</p>
+      <p className="text-[10px] text-amber-700/40">{ZODIAC_SIGNS[lagnaSignIdx]} Lagna · ℞ = retrograde</p>
+    </div>
+    <div className="w-full aspect-[3/2]">
+      <CuspKundaliSVG planets={planets} houseCusps={houseCusps} lagnaSignIdx={lagnaSignIdx} />
+    </div>
+  </div>
+
+  <div className="rounded-xl overflow-hidden flex flex-col">
+    <div className="px-4 pt-3 pb-1 flex items-center gap-3">
+      <p className="text-xs font-bold text-red-700 tracking-wide">Lagan Kundali</p>
+      <p className="text-[10px] text-amber-700/40">D1 Chart</p>
+    </div>
+    <div className="w-full aspect-[3/2]">
+      <D1Chart data={dashaData} />
+    </div>
+  </div>
+</div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <WesternHitChart data={dashaData} />
-              <PrashnaKundali data={dashaData} />
+              
+
+                 <div className="rounded-xl overflow-hidden flex flex-col">
+    <div className="px-4 pt-3 pb-1 flex items-center gap-3">
+      <p className="text-xs font-bold text-red-700 tracking-wide">Transit Kundli</p>
+      <p className="text-[10px] text-amber-700/40">{ZODIAC_SIGNS[lagnaSignIdx]} Lagna · ℞ = retrograde</p>
+    </div>
+    <div className="w-full aspect-[3/2]">
+     <TransiteChart
+  data={transitData}
+  loading={transitLoading}
+  error={transitError}
+/>
+    </div>
+  </div>
             </div>
+              <PrashnaKundali data={dashaData} />
 
             {/* Planetary Degrees Table */}
             <SectionCard title={`Planetary Positions · ${planets.length} bodies`}>
@@ -1138,8 +1206,9 @@ export default function ChartsPage() {
                 <p className="text-[10px] tracking-[0.18em] uppercase text-amber-700/60 font-semibold">Astro Details</p>
               </div>
               <div className="px-5 pb-5 pt-3">
-                <PersonDetails payload={payload} data={dashaData} /> 
                 <AstroScriptTable data={dashaData} />
+                {/* <AstroScriptTableSecond data={dashaData}/> */}
+                {/* <AstroScriptTableThird data={dashaData}/> */}
               </div>
             </div>
           </>
@@ -1156,6 +1225,12 @@ export default function ChartsPage() {
           <div className="grid grid-cols-1 xl:grid-cols-1 gap-4 items-start">
             <TimeLineTable dashaData={dashaData} />
             <MahadashaTable data={dashaData} />
+          </div>
+        );
+      case "personalDetails":
+        return (
+          <div className="px-5 pb-5 pt-3">
+            <PersonDetails payload={payload} data={dashaData} /> 
           </div>
         );
       default:
@@ -1276,7 +1351,9 @@ export default function ChartsPage() {
         </div>
 
         <TimeLineTableForPDF dashaData={dashaData} />
+        <MahadashaTable data={dashaData} />
         <AstroScriptTable data={dashaData} />
+        <WesternHitChart data={dashaData} />
       </div>
     </div>
   );

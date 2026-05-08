@@ -35,22 +35,27 @@ function addToTime(timeStr, hoursToAdd) {
   return toHMS(((dec + hoursToAdd) % 24 + 24) % 24);
 }
 
+// Normalize any time string to HH.MM.SS display format
+function normalizeTime(timeStr) {
+  if (!timeStr) return "—";
+  // Already HH:MM:SS — just swap separators
+  return timeStr.replace(/:/g, ".");
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PersonDetails({ payload, data }) {
   if (!payload) return null;
 
+  const pd = data?.person_details;  // backend response
+
   const lat = parseFloat(payload.lat);
   const lon = parseFloat(payload.lon);
 
-  // utcOffsetMin is always a number (e.g. 330 for IST).
-  // payload.timezone may be a string like "Asia/Kolkata" — never use it as a number.
   const tzHours = payload.utcOffsetMin != null
-    ? payload.utcOffsetMin / 60          // e.g. 330 / 60 = 5.5
+    ? payload.utcOffsetMin / 60
     : null;
 
-  // Local Time Correction = (lon - stdMeridian) / 15 hours
-  // stdMeridian = tzHours * 15
   const ltcHours = tzHours != null
     ? (lon - tzHours * 15) / 15
     : null;
@@ -60,24 +65,92 @@ export default function PersonDetails({ payload, data }) {
     ? `${ltcSign}${toHMS(Math.abs(ltcHours))}`
     : "—";
 
-  const lmtDisplay = ltcHours != null ? addToTime(payload.tob, ltcHours) : "—";
-  const gmtDisplay = tzHours  != null ? addToTime(payload.tob, -tzHours) : "—";
-
   const tzDisplay = tzHours != null
     ? `${tzHours >= 0 ? "+" : ""}${tzHours}`
     : (payload.timezone || "—");
 
+  // ── Prefer backend values, fall back to frontend calculations ──
   const rows = [
-    { label: "Date of Birth",          value: payload.dob      || "—" },
-    { label: "Time of Birth",          value: payload.tob      || "—" },
-    { label: "Place of Birth",         value: [payload.city, payload.country].filter(Boolean).join(", ") || "—" },
-    { label: "Time Zone",              value: tzDisplay },
-    { label: "Latitude",               value: toDMS(lat, "N", "S") },
-    { label: "Longitude",              value: toDMS(lon, "E", "W") },
-    { label: "Local Time Correction",  value: ltcDisplay },
-    { label: "War Time Correction",    value: "00.00.00" },
-    { label: "LMT at Birth",           value: lmtDisplay },
-    { label: "GMT at Birth",           value: gmtDisplay },
+    {
+      label: "Date of Birth",
+      value: payload.dob || "—",
+    },
+    {
+      label: "Time of Birth",
+      value: payload.tob || "—",
+    },
+    {
+      label: "Place of Birth",
+      value: [payload.city, payload.country].filter(Boolean).join(", ") || "—",
+    },
+    {
+      label: "Time Zone",
+      value: tzDisplay,
+    },
+    {
+      label: "Latitude",
+      value: pd?.latitude ?? toDMS(lat, "N", "S"),
+    },
+    {
+      label: "Longitude",
+      value: pd?.longitude ?? toDMS(lon, "E", "W"),
+    },
+    {
+      label: "Local Time Correction",
+      value: pd?.local_time_correction
+        ? normalizeTime(pd.local_time_correction)
+        : ltcDisplay,
+    },
+    {
+      label: "War Time Correction",
+      value: pd?.war_time_correction
+        ? normalizeTime(pd.war_time_correction)
+        : "00.00.00",
+    },
+    {
+      label: "LMT at Birth",
+      value: pd?.lmt_at_birth
+        ? normalizeTime(pd.lmt_at_birth)
+        : (ltcHours != null ? addToTime(payload.tob, ltcHours) : "—"),
+    },
+    {
+      label: "GMT at Birth",
+      value: pd?.gmt_at_birth
+        ? normalizeTime(pd.gmt_at_birth)
+        : (tzHours != null ? addToTime(payload.tob, -tzHours) : "—"),
+    },
+    {
+      label: "Tithi",
+      value: pd?.tithi ?? "—",
+    },
+    {
+      label: "Paksha",
+      value: pd?.paksha ?? "—",
+    },
+    {
+      label: "Hindu Week Day",
+      value: pd?.hindu_week_day ?? "—",
+    },
+    {
+      label: "Yoga",
+      value: pd?.yoga ?? "—",
+    },
+    {
+      label: "Karan",
+      value: pd?.karan ?? "—",
+    },
+    {
+      label: "Sunrise",
+      value: pd?.sunrise ? normalizeTime(pd.sunrise) : "—",
+    },
+    {
+      label: "Sunset",
+      value: pd?.sunset ? normalizeTime(pd.sunset) : "—",
+    },
+    {
+      label: "Day Duration",
+      value: pd?.day_duration ? normalizeTime(pd.day_duration) : "—",
+    },
   ];
 
   return (
@@ -116,8 +189,6 @@ export default function PersonDetails({ payload, data }) {
           ))}
         </tbody>
       </table>
-
-      
     </div>
   );
 }

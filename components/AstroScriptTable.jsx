@@ -543,7 +543,7 @@ export default function AstroScriptTable({ data }) {
   const houseCusps = data.house_cusps || [];
 
   useEffect(() => {
-    console.log("AstroScriptTable data:", data);
+    console.log("AstroScriptTable data:", planetPositions, projectionHits, houseCusps);
   }, [data]);
 
   // ─── 1. BUILD HOUSE INFO FROM house_cusps (ordered 1–12) ──────────────────
@@ -574,17 +574,14 @@ export default function AstroScriptTable({ data }) {
   }, [houseCusps, data.lordships]);
 
   // ─── 2. GROUP PLANETS BY SIGN ─────────────────────────────────────────────
-  const groupedBySign = useMemo(() => {
-    const map = {};
-    RASHI_ORDER.forEach((s) => { map[s] = []; });
-    data.astro_script.forEach((row) => {
-      if (map[row.sign] !== undefined) map[row.sign].push(row);
-    });
-    RASHI_ORDER.forEach((s) => {
-      map[s].sort((a, b) => (a.house || 0) - (b.house || 0));
-    });
-    return map;
-  }, [data.astro_script]);
+  const planetsByHouse = useMemo(() => {
+  const map = {};
+  for (let i = 1; i <= 12; i++) map[i] = [];
+  data.astro_script.forEach((row) => {
+    if (row.house != null) map[row.house].push(row);
+  });
+  return map;
+}, [data.astro_script]);
 
   // ─── 3. PLANET DEGREE MAP ─────────────────────────────────────────────────
   const planetDegMap = useMemo(() => {
@@ -701,7 +698,7 @@ export default function AstroScriptTable({ data }) {
           {houseInfoList.map((houseInfo) => {
             const sign = houseInfo.sign;
             // Planets that belong to this house's sign
-            const planets = groupedBySign[sign] || [];
+            const planets = planetsByHouse[houseInfo.house] || [];
             const rowCount = Math.max(planets.length, 1);
 
             const boxLabel = houseBoxMap[houseInfo.house] || houseInfo.box || "";

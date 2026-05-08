@@ -3,6 +3,46 @@
 const http = require("http");
 const swisseph = require("swisseph");
 
+
+
+/*─────────────────────────────────────────────────────────────
+  CONSTANTS FOR PERSONAL DETAILS
+─────────────────────────────────────────────────────────────*/
+
+const TITHIS = [
+  "PRATIPADA","DVITIYA","TRITIYA","CHATURTHI","PANCHAMI",
+  "SHASHTHI","SAPTAMI","ASHTAMI","NAVAMI","DASHAMI",
+  "EKADASHI","DVADASHI","TRAYODASHI","CHATURDASHI","PURNIMA",
+  "PRATIPADA","DVITIYA","TRITIYA","CHATURTHI","PANCHAMI",
+  "SHASHTHI","SAPTAMI","ASHTAMI","NAVAMI","DASHAMI",
+  "EKADASHI","DVADASHI","TRAYODASHI","CHATURDASHI","AMAVASYA"
+];
+
+const WEEKDAYS = [
+  "Sunday","Monday","Tuesday","Wednesday",
+  "Thursday","Friday","Saturday"
+];
+
+const PAKSHA = {
+  SHUKLA: "SHUKLA",
+  KRISHNA: "KRISHNA"
+};
+
+const KARANAS = [
+  "BAVA","BALAVA","KAULAVA","TAITILA","GARA",
+  "VANIJA","VISHTI"
+];
+
+const YOGAS = [
+  "VISHKAMBHA","PRITI","AYUSHMAN","SAUBHAGYA","SHOBHANA",
+  "ATIGANDA","SUKARMA","DHRITI","SHOOLA","GANDA",
+  "VRIDDHI","DHRUVA","VYAGHATA","HARSHANA","VAJRA",
+  "SIDDHI","VYATIPATA","VARIYAN","PARIGHA","SHIVA",
+  "SIDDHA","SADHYA","SHUBHA","SHUKLA","BRAHMA",
+  "INDRA","VAIDHRITI"
+];
+
+
 /*─────────────────────────────────────────────────────────────
   CONFIG
 ─────────────────────────────────────────────────────────────*/
@@ -122,6 +162,154 @@ function addYears(dateObj, years) {
 /*─────────────────────────────────────────────────────────────
   HELPERS
 ─────────────────────────────────────────────────────────────*/
+
+// personal details
+
+function formatTime(hours) {
+  hours = (hours + 24) % 24;
+
+  const h = Math.floor(hours);
+  const m = Math.floor((hours - h) * 60);
+  const s = Math.floor((((hours - h) * 60) - m) * 60);
+
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function formatDeg(value) {
+  const deg = Math.floor(Math.abs(value));
+  const minFloat = (Math.abs(value) - deg) * 60;
+  const min = Math.floor(minFloat);
+
+  return `${deg} : ${min}`;
+}
+
+function calculatePersonDetails(jd, lat, lon, birthDate, ayanamsaId) {
+  swisseph.swe_set_sid_mode(ayanamsaId, 0, 0);
+
+  const sun = swisseph.swe_calc_ut(jd, swisseph.SE_SUN, swisseph.SEFLG_SIDEREAL);
+  const moon = swisseph.swe_calc_ut(jd, swisseph.SE_MOON, swisseph.SEFLG_SIDEREAL);
+
+  /*── TITHI ──*/
+  const tithiDeg   = (moon.longitude - sun.longitude + 360) % 360;
+  const tithiIndex = Math.floor(tithiDeg / 12);
+  const tithi      = TITHIS[tithiIndex];
+  const paksha     = tithiIndex < 15 ? PAKSHA.SHUKLA : PAKSHA.KRISHNA;
+
+  /*── YOGA ──*/
+  const yogaDeg   = (sun.longitude + moon.longitude) % 360;
+  const yogaIndex = Math.floor(yogaDeg / (360 / 27));
+  const yoga      = YOGAS[yogaIndex];
+
+  /*── KARANA ──*/
+  const karanaIndex = Math.floor(tithiDeg / 6) % 7;
+  const karan       = KARANAS[karanaIndex];
+
+  /*── WEEKDAY ──*/
+  const weekday = WEEKDAYS[birthDate.getUTCDay()];
+
+  /*── SUNRISE / SUNSET via swe_rise_trans ──*/
+  // Use tropical Sun (no sidereal flag) for rise/set — this is standard
+  const geopos = [lon, lat, 0];
+  const atpress = 0; // atmospheric pressure (0 = default)
+  const attemp  = 0; // atmospheric temperature (0 = default)
+
+  // JD at local midnight (start of the calendar day in UT)
+  const jdMidnight = swisseph.swe_julday(
+    birthDate.getUTCFullYear(),
+    birthDate.getUTCMonth() + 1,
+    birthDate.getUTCDate(),
+    0,
+    swisseph.SE_GREG_CAL
+  );
+
+  let sunrise = "06:00:00";
+  let sunset  = "18:00:00";
+  let dayDuration = "12:00:00";
+
+  try {
+    const riseResult = swisseph.swe_rise_trans(
+      jdMidnight,
+      swisseph.SE_SUN,
+      null,               // star name — null for planets
+      swisseph.SEFLG_SPEED,
+      swisseph.SE_CALC_RISE,
+      geopos,
+      atpress,
+      attemp
+    );
+
+    const setResult = swisseph.swe_rise_trans(
+      jdMidnight,
+      swisseph.SE_SUN,
+      null,
+      swisseph.SEFLG_SPEED,
+      swisseph.SE_CALC_SET,
+      geopos,
+      atpress,
+      attemp
+    );
+
+    if (riseResult && riseResult.transitTime != null) {
+      // transitTime is JD — convert to UT hours
+      const riseJD    = riseResult.transitTime;
+      const riseHours = (riseJD - Math.floor(riseJD)) * 24;
+      sunrise = formatTime(riseHours);
+    }
+
+    if (setResult && setResult.transitTime != null) {
+      const setJD    = setResult.transitTime;
+      const setHours = (setJD - Math.floor(setJD)) * 24;
+      sunset = formatTime(setHours);
+    }
+
+    // Day duration
+    if (riseResult?.transitTime != null && setResult?.transitTime != null) {
+      const durationHours = (setResult.transitTime - riseResult.transitTime) * 24;
+      dayDuration = formatTime(durationHours);
+    }
+
+  } catch (riseErr) {
+    // Polar day/night or library issue — fall back to defaults silently
+    console.warn("swe_rise_trans failed:", riseErr.message);
+  }
+
+  /*── LMT / GMT ──*/
+  const localTimeCorrectionMinutes = lon * 4;
+
+  const lmtDate = new Date(
+    birthDate.getTime() + localTimeCorrectionMinutes * 60 * 1000
+  );
+
+  const lmt =
+    `${String(lmtDate.getUTCHours()).padStart(2, "0")}:` +
+    `${String(lmtDate.getUTCMinutes()).padStart(2, "0")}:` +
+    `${String(lmtDate.getUTCSeconds()).padStart(2, "0")}`;
+
+  const gmt =
+    `${String(birthDate.getUTCHours()).padStart(2, "0")}:` +
+    `${String(birthDate.getUTCMinutes()).padStart(2, "0")}:` +
+    `${String(birthDate.getUTCSeconds()).padStart(2, "0")}`;
+
+  return {
+    timezone:               5.5,
+    latitude:               `${formatDeg(lat)} : ${lat >= 0 ? "N" : "S"}`,
+    longitude:              `${formatDeg(lon)} : ${lon >= 0 ? "E" : "W"}`,
+    local_time_correction:  formatTime(localTimeCorrectionMinutes / 60),
+    war_time_correction:    "00:00:00",
+    lmt_at_birth:           lmt,
+    gmt_at_birth:           gmt,
+    tithi,
+    hindu_week_day:         weekday,
+    paksha,
+    yoga,
+    karan,
+    sunrise,
+    sunset,
+    day_duration:           dayDuration,
+  };
+}
+
+
 function dateToJD(dateObj) {
   return swisseph.swe_julday(
     dateObj.getUTCFullYear(),
@@ -701,8 +889,17 @@ function calculate(ayanamsa, coordinates, datetime) {
   const projectionHits = calculateProjectionHits(
   planetPositions,
   houseCusps
-);
+  );
+
+  const personDetails = calculatePersonDetails(
+  jd,
+  lat,
+  lon,
+  birthDate,
+  ayanamsaId
+  );
   return {
+    person_details: personDetails,
     planet_position:     planetPositions,
     house_cusps:         houseCusps,
     occupants,
