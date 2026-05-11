@@ -1,13 +1,13 @@
 // app/charts/page.jsx
 "use client";
-import AstroScriptTable from "@/components/AstroScriptTable";
+import AstroScriptTable from "@/components/tables/AstroScriptTable";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useCallback } from "react";
-import D1Chart from "@/components/D1Chart";
-import KPNakshatraTable from "@/components/KPNakshatraTable";
-import PlanetKPTable from "@/components/PlanetKPTable";
-import WesternHitChart from "@/components/HitChart";
-import PrashnaKundali from "@/components/PrashnaKundali";
+import D1Chart from "@/components/charts/D1Chart";
+import KPNakshatraTable from "@/components/tables/KPNakshatraTable";
+import PlanetKPTable from "@/components/tables/PlanetKPTable";
+import WesternHitChart from "@/components/charts/HitChart";
+import PrashnaKundali from "@/components/charts/PrashnaKundali";
 
 
 

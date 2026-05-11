@@ -130,17 +130,14 @@ export default function AstroScriptTableThird({ data }) {
 
   // ─── 6. GROUP PLANETS BY SIGN ─────────────────────────────────────────────
   //    Only used to look up planets for a given house's sign
-  const groupedBySign = useMemo(() => {
-    const map = {};
-    RASHI_ORDER.forEach((s) => { map[s] = []; });
-    data.astro_script.forEach((row) => {
-      if (map[row.sign] !== undefined) map[row.sign].push(row);
-    });
-    RASHI_ORDER.forEach((s) => {
-      map[s].sort((a, b) => (a.house || 0) - (b.house || 0));
-    });
-    return map;
-  }, [data.astro_script]);
+  const planetsByHouse = useMemo(() => {
+  const map = {};
+  for (let i = 1; i <= 12; i++) map[i] = [];
+  data.astro_script.forEach((row) => {
+    if (row.house != null) map[row.house].push(row);
+  });
+  return map;
+}, [data.astro_script]);
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   // Layout matches Image 1:
@@ -169,12 +166,11 @@ export default function AstroScriptTableThird({ data }) {
         {/* ── HEADER ── */}
         <thead>
           <tr style={{ background: "#e5e7eb" }}>
-            <th style={th}>Hits to</th>
+            <th style={th}>Hits to Box</th>
             <th style={{ ...th, textAlign: "center", minWidth: 40 }}>BOX</th>
             <th style={th}>Hits to Planet</th>
             <th style={{ ...th, textAlign: "center", minWidth: 45 }}>Rashi</th>
             <th style={{ ...th, minWidth: 30 }}>Pl</th>
-            <th style={{ ...th, textAlign: "center", minWidth: 70 }}>Degree</th>
             <th style={{ ...th, background: "#fef9c3", minWidth: 55 }}>Strength</th>
             <th style={{ ...th, background: "#fef9c3", minWidth: 65 }}>Conclusion</th>
           </tr>
@@ -184,7 +180,7 @@ export default function AstroScriptTableThird({ data }) {
         <tbody>
           {houseInfoList.map((houseInfo) => {
             const sign = houseInfo.sign;
-            const planets = groupedBySign[sign] || [];
+            const planets = planetsByHouse[houseInfo.house] || [];
             // Number of rows = max(planets in this sign, 1)
             const rowCount = Math.max(planets.length, 1);
 
@@ -233,20 +229,26 @@ export default function AstroScriptTableThird({ data }) {
 
                   {/* Col 2 — BOX number — rowSpan all rows of this house */}
                   {isFirstRow && (
-                    <td
-                      rowSpan={rowCount}
-                      style={{
-                        ...td,
-                        textAlign: "center",
-                        verticalAlign: "middle",
-                        fontWeight: 700,
-                        fontSize: 16,
-                        background: "#f3f4f6",
-                      }}
-                    >
-                      {houseInfo.house}
-                    </td>
-                  )}
+  <td
+    rowSpan={rowCount}
+    style={{
+      ...td,
+      textAlign: "center",
+      verticalAlign: "middle",
+      fontWeight: 700,
+      fontSize: 16,
+      background: "#f3f4f6",
+    }}
+  >
+    {houseInfo.house}
+    {/* ADD THIS — degree like AstroScriptTable col 4 */}
+    <div style={{ fontSize: 10, fontWeight: 400, color: "#6b7280", marginTop: 2 }}>
+      {houseInfo.degreeFormatted}
+      <span style={{ color: "black", margin: "0 2px" }}>/</span>
+      {formatDeg(houseInfo.longitude)}
+    </div>
+  </td>
+)}
 
                   {/* Col 3 — Hits to Planet */}
                   <td style={{ ...td, minWidth: 90 }}>
@@ -277,34 +279,23 @@ export default function AstroScriptTableThird({ data }) {
 
                   {/* Col 5 — Planet name */}
                   <td style={{ ...td, whiteSpace: "nowrap" }}>
-                    {planet ? (
-                      <span style={{ fontWeight: 600 }}>
-                        {planet.planet_number != null ? `${planet.planet_number} ` : ""}
-                        {/* Show 2-letter abbrev like image 1 */}
-                        {planet.planet?.slice(0, 2).toUpperCase()}
-                      </span>
-                    ) : ""}
-                  </td>
+  {planet ? (
+    <>
+      <span style={{ fontWeight: 600 }}>
+        {planet.planet_number != null ? `${planet.planet_number} ` : ""}
+        {planet.planet?.slice(0, 2).toUpperCase()}
+      </span>
+      {/* ADD THIS — degree formatted, same as AstroScriptTable */}
+      {degFormatted ? (
+        <span style={{ color: "#13100a", fontFamily: "monospace", fontSize: "1.1em" }}>
+          {" "}{degFormatted}
+        </span>
+      ) : ""}
+    </>
+  ) : ""}
+</td>
 
-                  {/* Col 6 — Degree */}
-                  <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
-                    {planet ? (
-                      <>
-                        {/* Degree within sign */}
-                        <div>{degFormatted}</div>
-                        {/* Sign label next to it (like image 1: "17.46 Pis") */}
-                        {isFirstRow && (
-                          <div style={{ color: "#6b7280", fontSize: 10 }}>
-                            {formatDeg(houseInfo.longitude)}
-                          </div>
-                        )}
-                      </>
-                    ) : isFirstRow ? (
-                      <div style={{ color: "#6b7280", fontSize: 10 }}>
-                        {formatDeg(houseInfo.longitude)}
-                      </div>
-                    ) : ""}
-                  </td>
+                  
 
                   {/* Col 7 — Strength (only first row) */}
                   {isFirstRow && (
