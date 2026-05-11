@@ -14,7 +14,6 @@ import AstroScriptTableThird from "@/components/tables/AstroScriptThird";
 import TransiteChart from "@/components/charts/Transite";
 import EducationTab from "@/components/education/EducationTab";
 import ProgressionChart from "@/components/charts/ProgressionChart";
-
 // ── Astrology helpers ─────────────────────────────────────────────────────────
 
 const PLANET_SHORT = {
@@ -1219,6 +1218,49 @@ export default function ChartsPage() {
   const [progressionHouseCusps, setProgressionHouseCusps] = useState([]);
   const [progressionData, setProgressionData] = useState(null);
 
+  const [saveStatus, setSaveStatus] = useState(null); // null | "saving" | "saved" | "duplicate" | "error"
+  const saveKundali = async () => {
+  if (saveStatus === "saving") return;
+  setSaveStatus("saving");
+
+  try {
+    const res = await fetch("/api/saveKundali", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({
+        name:         payload.name,
+        longitude:    payload.lon,
+        latitude:     payload.lat,
+        dob:          payload.dob,
+        tob:          payload.tob,
+        utcOffsetMin: payload.utcOffsetMin,
+        gender:       payload.gender,
+        city:         payload.city,
+        country:      payload.country,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (res.status === 409) { setSaveStatus("duplicate"); return; }
+    if (!res.ok) { setSaveStatus("error"); return; }
+
+    setSaveStatus("saved");
+
+  } catch {
+    setSaveStatus("error");
+  }
+};
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.replace("/login");   // kick out immediately
+    }
+  }, []);
+
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = PRINT_CSS;
@@ -1641,9 +1683,22 @@ export default function ChartsPage() {
           </div>
           <div className="flex items-center gap-2 no-print">
             <DownloadPDFButton />
+            <div className="flex flex-col items-end gap-1">
+  <button
+    onClick={saveKundali}
+    disabled={saveStatus === "saving" || saveStatus === "saved"}
+    className="cursor-pointer text-sm tracking-widest uppercase text-amber-700 border border-amber-300 px-3 py-2 rounded-md hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {saveStatus === "saving" ? "Saving…" : "Save Kundali"}
+  </button>
+
+  {saveStatus === "saved"     && <p className="text-[11px] text-green-600 font-medium">✓ Kundali saved</p>}
+  {saveStatus === "duplicate" && <p className="text-[11px] text-amber-600 font-medium">⚠ Already saved</p>}
+  {saveStatus === "error"     && <p className="text-[11px] text-red-500 font-medium">✗ Failed to save</p>}
+</div>
             <button
               onClick={() => router.push("/")}
-              className="text-sm tracking-widest uppercase text-amber-700 border border-amber-300 px-3 py-2 rounded-md hover:bg-amber-50 transition-all"
+              className="text-sm  cursor-pointer tracking-widest uppercase text-amber-700 border border-amber-300 px-3 py-2 rounded-md hover:bg-amber-50 transition-all"
             >
               ← Back
             </button>

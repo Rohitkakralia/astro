@@ -118,7 +118,13 @@ export default function BirthDetailsForm() {
     router.push(`/charts?data=${encoded}`);
   };
 
-  const isReady = form.dob && form.tob && place && utc;
+  const isReady =
+  form.name.trim() &&
+  form.gender &&
+  form.dob &&
+  form.tob &&
+  place &&
+  utc;
 
   return (
     <div style={styles.page}>
@@ -150,8 +156,9 @@ export default function BirthDetailsForm() {
 
           {/* Name */}
           <div style={styles.fieldGroup}>
-            <label style={styles.label}>Full Name <span style={styles.optional}>optional</span></label>
+            <label style={styles.label}>Full Name</label>
             <input
+              required
               style={styles.input} className="bd-input"
               type="text" placeholder="e.g. Arjun Sharma"
               value={form.name} onChange={e => set("name", e.target.value)}
@@ -259,7 +266,7 @@ export default function BirthDetailsForm() {
 
           {/* Gender */}
           <div style={styles.fieldGroup}>
-            <label style={styles.label}>Gender <span style={styles.optional}>optional</span></label>
+            <label style={styles.label}>Gender </label>
             <div style={styles.genderRow}>
               {[
                 { val: "male",   icon: "♂", label: "Male"   },
@@ -272,6 +279,7 @@ export default function BirthDetailsForm() {
                   className={`bd-gender${form.gender === g.val ? " sel" : ""}`}
                 >
                   <input
+                    required
                     type="radio" name="gender" value={g.val}
                     checked={form.gender === g.val}
                     onChange={() => set("gender", g.val)}
