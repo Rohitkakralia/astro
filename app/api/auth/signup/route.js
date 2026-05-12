@@ -2,90 +2,164 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import db from "@/lib/db";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const SALT_ROUNDS = 12;
+// ─── POST /api/registerUser ───────────────────────────────────────────────
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-// ─── POST /api/auth ───────────────────────────────────────────────────────────
 export async function POST(request) {
-  const { email, password } = await request.json();
-  console.log("login:", email, password);
 
-  // ── Validate input ──────────────────────────────────────────────────────────
-  if (!email || !password) {
-    return NextResponse.json(
-      { message: "Email and password are required." },
-      { status: 400 }
-    );
-  }
-  if (!isValidEmail(email)) {
-    return NextResponse.json(
-      { message: "Invalid email format." },
-      { status: 400 }
-    );
-  }
-  if (password.length < 8) {
-    return NextResponse.json(
-      { message: "Password must be at least 8 characters." },
-      { status: 400 }
-    );
-  }
+  let connection;
 
   try {
-    // ── Check if user exists ────────────────────────────────────────────────
-    const [rows] = await db.execute(
-      "SELECT id, password_hash FROM users WHERE email = ?",
+
+    const body = await request.json();
+    console.log("user register start------");
+    const {
+      email,
+      password,
+
+      planKey,
+      planName,
+      planAmount,
+
+      gst,
+      total,
+
+      currency,
+      paymentStatus,
+
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = body;
+
+    console.log("fields:", email, password, planKey, planAmount, gst, total, razorpay_order_id, razorpay_payment_id, razorpay_signature);
+
+    // ── Validate input ───────────────────────────────────────────────────
+
+    if (!email || !password) {
+      return NextResponse.json(
+        { message: "Email and password are required." },
+        { status: 400 }
+      );
+    }
+
+    // ── Get DB connection ────────────────────────────────────────────────
+
+    connection = await db.getConnection();
+
+    // ── Start transaction ────────────────────────────────────────────────
+
+    await connection.beginTransaction();
+
+    // ── Check existing user ──────────────────────────────────────────────
+
+    const [existingUsers] = await connection.execute(
+      `SELECT id FROM users WHERE email = ?`,
       [email]
     );
-    const existing = rows[0];
 
-    // ── Register (new user) ─────────────────────────────────────────────────
-    if (!existing) {
-      const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+    if (existingUsers.length > 0) {
 
-      const [result] = await db.execute(
-        "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-        [email, password_hash]
-      );
-
-      const [newUser] = await db.execute(
-        "SELECT id, email, created_at FROM users WHERE id = ?",
-        [result.insertId]
-      );
+      await connection.rollback();
 
       return NextResponse.json(
-        { message: "Account created successfully.", user: newUser[0] },
-        { status: 201 }
+        { message: "Email already exists." },
+        { status: 400 }
       );
     }
 
-    // ── Login (existing user) ───────────────────────────────────────────────
-    const match = await bcrypt.compare(password, existing.password_hash);
-    if (!match) {
-      return NextResponse.json(
-        { message: "Invalid email or password." },
-        { status: 401 }
-      );
-    }
+    // ── Hash password ────────────────────────────────────────────────────
 
-    const [user] = await db.execute(
-      "SELECT id, email, created_at FROM users WHERE id = ?",
-      [existing.id]
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // ── Insert user ──────────────────────────────────────────────────────
+
+    const [userResult] = await connection.execute(
+      `
+      INSERT INTO users (
+        email,
+        password_hash
+      )
+      VALUES (?, ?)
+      `,
+      [
+        email,
+        hashedPassword,
+      ]
     );
 
+    const userId = userResult.insertId;
+
+    // ── Insert subscription/payment ─────────────────────────────────────
+
+    await connection.execute(
+      `
+      INSERT INTO subscriptions (
+        user_id,
+        plan_key,
+        plan_name,
+        plan_amount,
+        gst,
+        total,
+        currency,
+        payment_status,
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        userId,
+        planKey,
+        planName,
+        planAmount,
+        gst,
+        total,
+        currency,
+        paymentStatus,
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+      ]
+    );
+
+    // ── Commit transaction ───────────────────────────────────────────────
+
+    await connection.commit();
+
+    // ── Return success response ──────────────────────────────────────────
+
     return NextResponse.json(
-      { message: "Login successful.", user: user[0] },
-      { status: 200 }
+      {
+        message: "User registered successfully.",
+
+        user: {
+          id: userId,
+          email,
+        },
+      },
+      { status: 201 }
     );
 
   } catch (err) {
-    console.error("Auth error:", err);
+
+    console.error("Register error:", err);
+
+    // rollback if error
+    if (connection) {
+      await connection.rollback();
+    }
+
     return NextResponse.json(
       { message: "Internal server error." },
       { status: 500 }
     );
+
+  } finally {
+
+    // release DB connection
+    if (connection) {
+      connection.release();
+    }
   }
 }

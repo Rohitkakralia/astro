@@ -1,8 +1,8 @@
 import Image from "next/image";
-import BirthDetailsForm from "@/components/BirthDetailsForm";
+import HomePage from "@/components/Home";
 
 export default function Home() {
   return (
-    <BirthDetailsForm/>
+    <HomePage/>
   );
 }
