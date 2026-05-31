@@ -8,9 +8,10 @@ import { User, LogOut, UserCircle } from "lucide-react";
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
-  { label: "Fill Details", href: "/input" },
-  { label: "Charts", href: "/charts", private: true },
+  { label: "Generate Kundali", href: "/input" },
+  { label: "Kundali", href: "/charts", private: true },
   { label: "History", href: "/history", private: true },
+  { label: "Education", href: "/education", private: true },
 ];
 
 export default function Navbar() {
@@ -48,6 +49,15 @@ export default function Navbar() {
   const handleLogin = () => {
     window.location.href = "/login";
   };
+
+  // Filter logic:
+  // - On /charts route → show ONLY the Charts tab
+  // - On any other route → show all tabs EXCEPT Charts
+  const visibleLinks = NAV_LINKS.filter((l) => {
+    if (l.private && !isLoggedIn) return false;
+    if (pathname === "/charts") return l.href === "/charts";
+    return l.href !== "/charts";
+  });
 
   return (
     <header
@@ -202,15 +212,35 @@ export default function Navbar() {
             flexShrink: 0,
           }}
         >
-          <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+          <svg
+            width="30"
+            height="30"
+            viewBox="0 0 30 30"
+            fill="none"
+            aria-hidden="true"
+          >
             <circle cx="15" cy="15" r="13" stroke="#d4b96a" strokeWidth="1" />
             <circle cx="15" cy="15" r="3" fill="#8b6914" />
             <circle cx="15" cy="3.5" r="1.5" fill="#c9a84c" />
             <circle cx="26.5" cy="15" r="1.5" fill="#c9a84c" />
             <circle cx="15" cy="26.5" r="1.5" fill="#c9a84c" />
             <circle cx="3.5" cy="15" r="1.5" fill="#c9a84c" />
-            <line x1="15" y1="3.5" x2="15" y2="26.5" stroke="#e8d89a" strokeWidth="0.6" />
-            <line x1="3.5" y1="15" x2="26.5" y2="15" stroke="#e8d89a" strokeWidth="0.6" />
+            <line
+              x1="15"
+              y1="3.5"
+              x2="15"
+              y2="26.5"
+              stroke="#e8d89a"
+              strokeWidth="0.6"
+            />
+            <line
+              x1="3.5"
+              y1="15"
+              x2="26.5"
+              y2="15"
+              stroke="#e8d89a"
+              strokeWidth="0.6"
+            />
           </svg>
           <span
             style={{
@@ -240,8 +270,11 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop nav links */}
-        <div className="jy-links" style={{ display: "flex", alignItems: "center", gap: "0.15rem" }}>
-          {NAV_LINKS.filter((l) => !l.private || isLoggedIn).map((l) => {
+        <div
+          className="jy-links"
+          style={{ display: "flex", alignItems: "center", gap: "0.15rem" }}
+        >
+          {visibleLinks.map((l) => {
             const isActive = pathname === l.href;
             return (
               <Link
@@ -291,7 +324,10 @@ export default function Navbar() {
                   <button
                     className="jy-dropdown-item"
                     role="menuitem"
-                    onClick={() => { router.push("/profile"); setProfileOpen(false); }}
+                    onClick={() => {
+                      router.push("/profile");
+                      setProfileOpen(false);
+                    }}
                   >
                     <UserCircle size={15} color="#c9a84c" />
                     Profile
@@ -343,7 +379,7 @@ export default function Navbar() {
             gap: "0.1rem",
           }}
         >
-          {NAV_LINKS.filter((l) => !l.private || isLoggedIn).map((l) => {
+          {visibleLinks.map((l) => {
             const isActive = pathname === l.href;
             return (
               <Link
@@ -357,7 +393,9 @@ export default function Navbar() {
                   fontWeight: isActive ? 500 : 300,
                   color: isActive ? "#3d2800" : "#7a5c2e",
                   textDecoration: "none",
-                  borderBottom: isActive ? "1px solid #8b6914" : "1px solid transparent",
+                  borderBottom: isActive
+                    ? "1px solid #8b6914"
+                    : "1px solid transparent",
                   display: "block",
                 }}
               >
@@ -407,7 +445,10 @@ export default function Navbar() {
                   justifyContent: "center",
                   gap: 8,
                 }}
-                onClick={() => { router.push("/profile"); setOpen(false); }}
+                onClick={() => {
+                  router.push("/profile");
+                  setOpen(false);
+                }}
               >
                 <UserCircle size={15} />
                 Profile

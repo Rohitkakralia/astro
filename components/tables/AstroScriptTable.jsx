@@ -75,87 +75,69 @@ function getConclusion(strength) {
 }
 
 export default function AstroScriptTable({ data }) {
-  if (!data || !data.astro_script) return null;
-
-  const planetPositions = data.planet_position || [];
-  const projectionHits = data.projection_hits || [];
-  const houseCusps = data.house_cusps || [];
+  // ✅ ALL hooks must come before any return
+  
+  const planetPositions = data?.planet_position || [];
+  const projectionHits = data?.projection_hits || [];
+  const houseCusps = data?.house_cusps || [];
 
   useEffect(() => {
     console.log("AstroScriptTable data:", planetPositions, projectionHits, houseCusps);
   }, [data]);
 
-  // ─── 1. BUILD HOUSE INFO FROM house_cusps (ordered 1–12) ──────────────────
   const houseInfoList = useMemo(() => {
+    if (!houseCusps.length) return [];
     return houseCusps.map((lon, idx) => {
       const sign = signFromLongitude(lon);
       const degIn = degInSign(lon);
-
       const current = lon;
-      const next =
-        idx < houseCusps.length - 1
-          ? houseCusps[idx + 1]
-          : houseCusps[0];
-
+      const next = idx < houseCusps.length - 1 ? houseCusps[idx + 1] : houseCusps[0];
       const strength = (next - current + 360) % 360;
-
       return {
         house: idx + 1,
         longitude: parseFloat(lon),
         sign,
         degreeInSign: degIn,
         degreeFormatted: formatDeg(degIn),
-        box: data.lordships?.[idx + 1]?.box || "",
+        box: data?.lordships?.[idx + 1]?.box || "",
         strength: Math.round(strength),
         conclusion: getConclusion(strength),
       };
     });
-  }, [houseCusps, data.lordships]);
+  }, [houseCusps, data?.lordships]);
 
-  // ─── 2. GROUP PLANETS BY SIGN ─────────────────────────────────────────────
   const planetsByHouse = useMemo(() => {
-  const map = {};
-  for (let i = 1; i <= 12; i++) map[i] = [];
-  data.astro_script.forEach((row) => {
-    if (row.house != null) map[row.house].push(row);
-  });
-  return map;
-}, [data.astro_script]);
+    const map = {};
+    for (let i = 1; i <= 12; i++) map[i] = [];
+    data?.astro_script?.forEach((row) => {
+      if (row.house != null) map[row.house].push(row);
+    });
+    return map;
+  }, [data?.astro_script]);
 
-  // ─── 3. PLANET DEGREE MAP ─────────────────────────────────────────────────
   const planetDegMap = useMemo(() => {
     const map = {};
-    planetPositions.forEach((p) => {
-      map[p.name] = p.degree_formatted || "";
-    });
+    planetPositions.forEach((p) => { map[p.name] = p.degree_formatted || ""; });
     return map;
   }, [planetPositions]);
 
-  // ─── 4a. PLANET → HOUSE NUMBER MAP ───────────────────────────────────────
-  // Used to prefix hit labels with the source planet's box/house number
   const planetHouseMap = useMemo(() => {
     const map = {};
-    data.astro_script.forEach((row) => {
-      if (row.planet && row.house != null) {
-        map[row.planet] = row.house;
-      }
+    data?.astro_script?.forEach((row) => {
+      if (row.planet && row.house != null) map[row.planet] = row.house;
     });
     return map;
-  }, [data.astro_script]);
+  }, [data?.astro_script]);
 
-  // ─── 4. HIT MAP ───────────────────────────────────────────────────────────
   const hitMap = useMemo(() => {
     const map = { houses: {}, planets: {} };
     projectionHits.forEach((source) => {
       const src = source.source_planet;
       const srcShort = src.slice(0, 2);
       const srcHouse = planetHouseMap[src] ?? "";
-      // Format: "7 Su 90"
       const prefix = srcHouse !== "" ? `${srcHouse} ${srcShort}` : srcShort;
-
       source.projections.forEach((proj) => {
-        const angle = proj.angle;
-        const label = `${prefix} ${angle}`;
+        const label = `${prefix} ${proj.angle}`;
         proj.hit_houses?.forEach((h) => {
           if (!map.houses[h.house]) map.houses[h.house] = [];
           map.houses[h.house].push(label);
@@ -169,17 +151,18 @@ export default function AstroScriptTable({ data }) {
     return map;
   }, [projectionHits, planetHouseMap]);
 
-  // ─── 5. LORDSHIP BOX MAP ──────────────────────────────────────────────────
   const houseBoxMap = useMemo(() => {
     const map = {};
-    if (data.lordships) {
+    if (data?.lordships) {
       Object.entries(data.lordships).forEach(([houseNum, info]) => {
         map[parseInt(houseNum)] = info.box || info.meaning || "";
       });
     }
     return map;
-  }, [data.lordships]);
+  }, [data?.lordships]);
 
+  // ✅ Early return AFTER all hooks
+  if (!data || !data.astro_script) return null;
   // ─── RENDER ───────────────────────────────────────────────────────────────
   // Outer loop: houses 1–12 (houseInfoList is already sorted by house index)
   // Inner loop: planets whose sign matches this house's sign

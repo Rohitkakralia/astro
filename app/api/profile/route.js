@@ -5,10 +5,9 @@ import db from "@/lib/db";
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ─── GET /api/profile ─────────────────────────────────────────────────────────
-// Returns: user account info + active subscription + saved kundalis count & list
 export async function GET(request) {
 
-  // ── Verify JWT ──────────────────────────────────────────────────────────────
+  // ── Verify JWT ────────────────────────────────────────────────────────────
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.split(" ")[1]
@@ -33,11 +32,9 @@ export async function GET(request) {
   }
 
   try {
-    // ── 1. User account info ────────────────────────────────────────────────
+    // ── 1. User account info ──────────────────────────────────────────────
     const [[user]] = await db.execute(
-      `SELECT id, email, created_at
-       FROM users
-       WHERE id = ?`,
+      `SELECT id, email, created_at FROM users WHERE id = ?`,
       [userID]
     );
 
@@ -48,8 +45,14 @@ export async function GET(request) {
       );
     }
 
-    // ── 2. Latest / active subscription ────────────────────────────────────
-    const [[subscription]] = await db.execute(
+    // ── 2. Kundali wallet (source of truth for balance) ───────────────────
+    const [[wallet]] = await db.execute(
+      `SELECT remaining_kundalis FROM kundali_wallet WHERE user_id = ?`,
+      [userID]
+    );
+
+    // ── 3. ALL subscriptions (full payment history) ───────────────────────
+    const [subscriptions] = await db.execute(
       `SELECT
          plan_key, plan_name, plan_amount, gst, total,
          currency, payment_status,
@@ -57,12 +60,11 @@ export async function GET(request) {
          created_at
        FROM subscriptions
        WHERE user_id = ? AND payment_status = 'paid'
-       ORDER BY created_at DESC
-       LIMIT 1`,
+       ORDER BY created_at DESC`,
       [userID]
     );
 
-    // ── 3. Saved kundalis ───────────────────────────────────────────────────
+    // ── 4. Saved kundalis ─────────────────────────────────────────────────
     const [kundalis] = await db.execute(
       `SELECT
          id, name, gender, dob, tob,
@@ -74,28 +76,48 @@ export async function GET(request) {
       [userID]
     );
 
-    // ── 4. Compose response ─────────────────────────────────────────────────
+    // ── 5. Compose response ───────────────────────────────────────────────
     return NextResponse.json(
       {
         user: {
-          id:         user.id,
-          email:      user.email,
+          id:          user.id,
+          email:       user.email,
           memberSince: user.created_at,
         },
-        subscription: subscription
+
+        // live balance from wallet
+        remainingKundalis: wallet?.remaining_kundalis ?? 0,
+
+        // latest plan (for the badge/header)
+        activeSubscription: subscriptions[0]
           ? {
-              planKey:          subscription.plan_key,
-              planName:         subscription.plan_name,
-              planAmount:       subscription.plan_amount,
-              gst:              subscription.gst,
-              total:            subscription.total,
-              currency:         subscription.currency,
-              status:           subscription.payment_status,
-              razorpayOrderId:  subscription.razorpay_order_id,
-              razorpayPaymentId: subscription.razorpay_payment_id,
-              purchasedAt:      subscription.created_at,
+              planKey:           subscriptions[0].plan_key,
+              planName:          subscriptions[0].plan_name,
+              planAmount:        subscriptions[0].plan_amount,
+              gst:               subscriptions[0].gst,
+              total:             subscriptions[0].total,
+              currency:          subscriptions[0].currency,
+              status:            subscriptions[0].payment_status,
+              razorpayOrderId:   subscriptions[0].razorpay_order_id,
+              razorpayPaymentId: subscriptions[0].razorpay_payment_id,
+              purchasedAt:       subscriptions[0].created_at,
             }
           : null,
+
+        // full history
+        subscriptionHistory: subscriptions.map((s) => ({
+          planKey:           s.plan_key,
+          planName:          s.plan_name,
+          planAmount:        s.plan_amount,
+          gst:               s.gst,
+          total:             s.total,
+          currency:          s.currency,
+          status:            s.payment_status,
+          razorpayOrderId:   s.razorpay_order_id,
+          razorpayPaymentId: s.razorpay_payment_id,
+          purchasedAt:       s.created_at,
+        })),
+
         kundalis: kundalis.map((k) => ({
           id:           k.id,
           name:         k.name,

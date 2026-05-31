@@ -859,33 +859,28 @@ function calculate(ayanamsa, coordinates, datetime) {
     birthDate
   );
 
-  const currentMD = getCurrentMahadasha(mdTimeline);
+  const currentMD = getCurrentMahadasha(mdTimeline) ?? mdTimeline[0] ?? null;
 
-  // FIX: pass only mdLord + mdStart, NOT mdEnd
-  const antardashas = generateAntardasha(
-    currentMD.lord,
-    currentMD.start
-  );
+const antardashas = currentMD
+  ? generateAntardasha(currentMD.lord, currentMD.start)
+  : [];
 
-  const currentADL = getCurrentADL(antardashas);
+const currentADL = currentMD ? getCurrentADL(antardashas) ?? antardashas[0] ?? null : null;
 
-   // Pratyantar Dasha (PD) — sub-periods of current AD
-  const pratyantar_timeline = currentADL
-    ? generatePratyantarDasha(currentMD.lord, currentADL.lord, currentADL.start)
-    : [];
-  const current_pd = getCurrentPD(pratyantar_timeline);
+const pratyantar_timeline = currentADL && currentMD
+  ? generatePratyantarDasha(currentMD.lord, currentADL.lord, currentADL.start)
+  : [];
+const current_pd = getCurrentPD(pratyantar_timeline) ?? null;
 
-  // Sookshma Dasha (SD) — sub-periods of current PD
-  const sookshma_timeline = current_pd
-    ? generateSookshmaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_pd.start)
-    : [];
-  const current_sd = getCurrentSD(sookshma_timeline);
+const sookshma_timeline = current_pd && currentADL && currentMD
+  ? generateSookshmaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_pd.start)
+  : [];
+const current_sd = getCurrentSD(sookshma_timeline) ?? null;
 
-  // Prana Dasha (PR) — sub-periods of current SD
-  const prana_timeline = current_sd
-    ? generatePranaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_sd.lord, current_sd.start)
-    : [];
-  const current_pr = getCurrentPR(prana_timeline);
+const prana_timeline = current_sd && current_pd && currentADL && currentMD
+  ? generatePranaDasha(currentMD.lord, currentADL.lord, current_pd.lord, current_sd.lord, current_sd.start)
+  : [];
+const current_pr = getCurrentPR(prana_timeline) ?? null;
   const projectionHits = calculateProjectionHits(
   planetPositions,
   houseCusps

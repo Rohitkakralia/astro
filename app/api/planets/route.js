@@ -156,7 +156,6 @@ export async function GET(request) {
 
     const json = await upstream.json();
 
-    console.log("response from swiss: ", json);
     if (!upstream.ok || !json.success) {
       return Response.json(
         { success: false, error: json.error || "Swisseph server error" },

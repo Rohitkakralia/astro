@@ -1,33 +1,49 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
-// ─── POST /api/auth/check-email ───────────────────────────────────────────────
-export async function POST(request) {
-  try {
-    const { email } = await request.json();
+// ─── POST /api/auth/checkEmailExists ─────────────────────────────────────────
 
-    // Find user by email
-    const [rows] = await db.execute(
-      "SELECT id FROM users WHERE email = ? LIMIT 1",
+export async function POST(request) {
+
+  let connection;
+
+  try {
+
+    const body = await request.json();
+    const { email } = body;
+
+    if (!email) {
+      return NextResponse.json(
+        { message: "Email is required." },
+        { status: 400 }
+      );
+    }
+
+    connection = await db.getConnection();
+
+    const [rows] = await connection.execute(
+      `SELECT id FROM users WHERE email = ? LIMIT 1`,
       [email]
     );
 
-    const user = rows[0];
-
     return NextResponse.json(
-      {
-        exists: !!user,
-      },
+      { exists: rows.length > 0 },
       { status: 200 }
     );
+
   } catch (err) {
-    console.error("Check email error:", err);
+
+    console.error("checkEmailExists error:", err);
 
     return NextResponse.json(
-      {
-        message: "Internal server error.",
-      },
+      { message: "Internal server error." },
       { status: 500 }
     );
+
+  } finally {
+
+    if (connection) {
+      connection.release();
+    }
   }
 }

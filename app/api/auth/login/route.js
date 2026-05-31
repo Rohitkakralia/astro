@@ -8,8 +8,10 @@ const JWT_EXPIRES_IN = "7d"; // token valid for 7 days
 
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 export async function POST(request) {
-  const { email, password } = await request.json();
 
+  const { email, password } = await request.json();
+  console.log("backend login:", email, password);
+  
   // ── Validate input ────────────────────────────────────────────────────────
   if (!email || !password) {
     return NextResponse.json(

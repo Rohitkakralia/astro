@@ -113,7 +113,10 @@ export default function BirthDetailsForm() {
       lat: place.lat, lon: place.lon, tz: place.tz,
       utcDate: utc.date, utcTime: utc.time,
       utcOffsetStr: utc.offsetStr, utcOffsetMin: utc.offsetMin,
+      comeFrom:"generate",
     };
+
+    
     const encoded = btoa(JSON.stringify(payload));
     router.push(`/charts?data=${encoded}`);
   };

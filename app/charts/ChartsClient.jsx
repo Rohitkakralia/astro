@@ -616,6 +616,8 @@ function TimeLineTable({ dashaData }) {
   const [pdIdxMap, setPdIdxMap] = useState({});
   const [sdIdxMap, setSdIdxMap] = useState({});
   const [prIdxMap, setPrIdxMap] = useState({});
+  const [searchDate, setSearchDate] = useState("");
+  const [searchResult, setSearchResult] = useState(null);
 
   if (!dashaData) return null;
 
@@ -841,6 +843,44 @@ function TimeLineTable({ dashaData }) {
     );
   };
 
+  // Add this function inside TimeLineTable
+const handleDateSearch = () => {
+  if (!searchDate) return;
+  const searchTs = new Date(searchDate).getTime();
+
+  const foundMDIdx = mahadasha_timeline.findIndex(
+    (md) => searchTs >= new Date(md.start).getTime() && searchTs < new Date(md.end).getTime()
+  );
+
+  if (foundMDIdx < 0) {
+    setSearchResult({ notFound: true });
+    return;
+  }
+
+  // Jump the navigators to the found MD
+  setMdIdx(foundMDIdx);
+
+  // Find matching AD from antardasha_timeline
+  const allADs = antardasha_timeline
+    .filter((a) => {
+      const adEnd = new Date(a.end);
+      const md = mahadasha_timeline[foundMDIdx];
+      return adEnd > new Date(md.start) && adEnd <= new Date(md.end);
+    })
+    .sort((a, b) => new Date(a.end) - new Date(b.end));
+
+  const foundADIdx = allADs.findIndex(
+    (a) => searchTs >= new Date(a.start).getTime() && searchTs < new Date(a.end).getTime()
+  );
+
+  setAdIdxMap((p) => ({ ...p, [foundMDIdx]: foundADIdx >= 0 ? foundADIdx : 0 }));
+
+  const md = mahadasha_timeline[foundMDIdx];
+  const ad = allADs[foundADIdx >= 0 ? foundADIdx : 0];
+
+  setSearchResult({ md, ad, date: searchDate });
+};
+
   return (
     <div className="bg-white border border-amber-200/60 rounded-xl overflow-hidden shadow-sm">
       <div className="px-5 pt-4 pb-3 border-b border-amber-100">
@@ -894,6 +934,60 @@ function TimeLineTable({ dashaData }) {
           </p>
         )}
       </div>
+
+      {/* Date Search */}
+<div className="flex items-center gap-2 mt-3 flex-wrap">
+  <i className="ti ti-calendar-search text-amber-600/60 text-lg" aria-hidden="true" />
+  <input
+    type="date"
+    value={searchDate}
+    onChange={(e) => setSearchDate(e.target.value)}
+    className="text-xs border border-amber-200 rounded-md px-2 py-1.5 bg-amber-50/40 text-stone-700 focus:outline-none focus:border-amber-400"
+  />
+  <button
+    onClick={handleDateSearch}
+    className="text-xs font-medium text-amber-700 border border-amber-300 px-3 py-1.5 rounded-md hover:bg-amber-50 transition-colors"
+  >
+    Find dasha
+  </button>
+  {searchResult && (
+    <button
+      onClick={() => { setSearchResult(null); setSearchDate(""); }}
+      className="text-xs text-stone-400 border border-stone-200 px-2 py-1.5 rounded-md hover:bg-stone-50"
+    >
+      Clear
+    </button>
+  )}
+</div>
+
+{/* Search Result */}
+{searchResult && (
+  <div className="mt-2 bg-amber-50/60 border border-amber-200/60 rounded-lg px-4 py-3">
+    {searchResult.notFound ? (
+      <p className="text-xs text-stone-400">No dasha found for this date.</p>
+    ) : (
+      <>
+        <p className="text-[10px] uppercase tracking-widest text-amber-600/60 font-semibold mb-2">
+          Dasha on {searchResult.date}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "Mahadasha", d: searchResult.md },
+            { label: "Antardasha", d: searchResult.ad },
+          ].map(({ label, d }) => d && (
+            <div key={label} className="bg-white border border-amber-200/60 rounded-md px-3 py-2">
+              <p className="text-[9px] uppercase tracking-widest text-stone-400 mb-1">{label}</p>
+              <p className="text-sm font-bold text-stone-800">{d.lord}</p>
+              <p className="text-[10px] font-mono text-amber-700/60 mt-0.5">
+                {fmtDate(d.start)} → {fmtDate(d.end)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </>
+    )}
+  </div>
+)}
 
       <div className="border-b border-amber-100">
         <SectionLabel label="Mahadasha" />
@@ -1218,6 +1312,9 @@ export default function ChartsPage() {
   const [progressionHouseCusps, setProgressionHouseCusps] = useState([]);
   const [progressionData, setProgressionData] = useState(null);
 
+  const [subscriptionUpdated, setSubscriptionUpdated] = useState(false);
+
+
   const [saveStatus, setSaveStatus] = useState(null); // null | "saving" | "saved" | "duplicate" | "error"
   const saveKundali = async () => {
   if (saveStatus === "saving") return;
@@ -1261,6 +1358,7 @@ export default function ChartsPage() {
     }
   }, []);
 
+
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = PRINT_CSS;
@@ -1280,6 +1378,71 @@ export default function ChartsPage() {
       setError(err.message || "Invalid birth data.");
     }
   }, [searchParams]);
+
+
+
+useEffect(() => {
+  if(subscriptionUpdated) return;
+  if (!payload) return;
+
+  // Only run once
+  if (
+    payload.comeFrom === "generate" &&
+    !subscriptionUpdated
+  ) {
+    updateSubscription();
+  }
+}, [payload, subscriptionUpdated]);
+
+const updateSubscription = async () => {
+  try {
+    setSubscriptionUpdated(true);
+
+    const res = await fetch("/api/checkSubscription", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({
+        name: payload.name,
+        dob: payload.dob,
+        tob: payload.tob,
+        lat: payload.lat,
+        lon: payload.lon,
+      }),
+    });
+
+    const data = await res.json();
+
+    // No remaining kundalis
+    if (res.status === 400) {
+      alert("No remaining kundalis left.");
+      router.push("/updateSub");
+      return;
+    }
+
+    if (!res.ok) {
+      console.error("Subscription update failed:", data);
+      return;
+    }
+
+    // Prevent update again after reload
+    const updatedPayload = {
+      ...payload,
+      comeFrom: "view",
+    };
+
+    const encoded = btoa(JSON.stringify(updatedPayload));
+
+    router.replace(`/charts?data=${encoded}`);
+
+    console.log("Subscription updated successfully");
+
+  } catch (err) {
+    console.error("Error updating subscription:", err);
+  }
+};
 
   useEffect(() => {
     if (!payload) return;
@@ -1617,9 +1780,9 @@ export default function ChartsPage() {
                 </p>
               </div>
               <div className="px-5 pb-5 pt-3">
+                <AstroScriptTableThird data={dashaData} />
                 <AstroScriptTable data={dashaData} />
                 {/* <AstroScriptTableSecond data={dashaData}/> */}
-                <AstroScriptTableThird data={dashaData} />
               </div>
             </div>
           </>

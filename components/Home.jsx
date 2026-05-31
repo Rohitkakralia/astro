@@ -361,8 +361,8 @@ export default function HomePage() {
                 <Link href="/contact" style={{ ...S.btnPrimary, textDecoration: "none", display: "inline-block" }}>
                   Book a Consultation
                 </Link>
-                <Link href="/charts" style={{ ...S.btnOutline, textDecoration: "none", display: "inline-block" }}>
-                  View Charts
+                <Link href="/ourPlans" style={{ ...S.btnOutline, textDecoration: "none", display: "inline-block" }}>
+                  View our plans
                 </Link>
               </div>
             </div>
